@@ -46,11 +46,18 @@ description is paid by every session, every time.
 ## Install
 
 ```bash
-git clone https://github.com/by-su/jigkit ~/jigkit
-echo 'export PATH="$HOME/jigkit/bin:$PATH"' >> ~/.zshrc
+git clone https://github.com/by-su/jigkit
+cd jigkit
+./bootstrap.sh
 ```
 
-Requires Claude Code, `python3`, and PyYAML.
+Clone it anywhere. `bootstrap.sh` derives its own location, so no path is hardcoded.
+It checks for Claude Code, `python3`, PyYAML and `git`; fetches the registered skill
+sources into `library/cache/`; and runs `jig doctor` to confirm the result actually
+works. Running it again is safe and does nothing new.
+
+It **prints** the `PATH` line rather than editing your shell config. Pass `--path` to
+have it appended for you, or `--no-sync` to skip the network.
 
 ## Use
 
@@ -65,6 +72,18 @@ jig growth 0 10 25 50       # measure the cost curve for N skills
 jig golden [--update]       # regression-test the compiler
 jig argv developer          # print the launch argv without running it
 jig new <name>              # scaffold a profile
+```
+
+Skill sources:
+
+```bash
+jig source add <url>        # register an open-source skill repository
+jig source list             # registered sources and sync state
+jig sync [source]           # fetch to the pinned commit
+jig sync --check            # is there an update? touches nothing
+jig sync --update [source]  # apply, showing what changed
+jig skills [pattern]        # what is available, and what it costs
+jig usage [project]         # what actually got invoked
 ```
 
 ## How a profile is defined
@@ -86,6 +105,90 @@ A profile is defined by **what it reads, what it writes, and what it may not
 touch** — not by a persona. See
 [`PRINCIPLES.md`](PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다), which
 keeps the strongest published objection to this design rather than hiding it.
+
+## Skill sources
+
+Useful skills already exist in the open. Register a repository by link — only the
+link and a pinned commit are committed here.
+
+```bash
+jig source add https://github.com/anthropics/skills
+jig sync
+jig skills
+```
+
+`library/sources.yaml` holds the link and the SHA. The repository contents land in
+`library/cache/<ns>/`, which is gitignored: a download, not something this project
+maintains. Delete it any time and `jig sync` restores it.
+
+A profile activates skills by id, or by glob:
+
+```yaml
+skills: ["anthropics/*"]                     # discovery — everything on
+skills: [anthropics/pdf, anthropics/xlsx]    # after measuring
+```
+
+Skill directories are flattened into the compiled plugin (`anthropics-pdf`), so two
+sources can ship a skill of the same name without colliding. Whatever ships next to
+`SKILL.md` — `scripts/`, `references/`, `templates/` — comes along at no session cost,
+since only the description is read at start.
+
+### Start wide, then narrow on measurement
+
+Reading forty skill bodies to decide what to enable is not realistic. So profiles ship
+with everything on, and the harness records what actually gets invoked.
+
+Measured here with the 18 skills in `anthropics/skills`
+([`probe/results/growth.md`](probe/results/growth.md)):
+
+| `developer` | Session start | Per skill |
+|---|---:|---:|
+| 0 skills | 15,625 | — |
+| 18 skills (`anthropics/*`) | 18,445 | 157 |
+| 32 skills (`+ obra/*`) | 19,213 | 112 |
+
+157 tokens per skill for `anthropics/skills` — the top of the 70–161 range measured with
+synthetic skills. The second source is cheaper per skill only because its descriptions
+are terser, which is the same finding again: **description length sets the cost, not the
+skill count.**
+
+`jig usage` then reports what a profile invoked and what it declared but never called:
+
+```
+developer
+  anthropics/brand-guidelines    12 calls   last 2026-08-12
+  declared but never invoked — 15
+```
+
+Narrowing is a one-line edit. **Nothing is pruned automatically**: a skill invoked once
+in fifty sessions may be decisive in that one session, and a counter cannot know that.
+
+Recording is a `PreToolUse` hook the compiler writes into each profile plugin. It
+appends one line to the project's `.harness/skill-usage.jsonl` and always exits 0, so a
+broken hook can never block a session.
+
+### Updating
+
+Skills are instructions given to an agent, not data. When upstream changes quietly, the
+agent's behaviour changes without review. So checking and applying are separate.
+
+```bash
+jig sync --check              # one ls-remote per source; touches nothing
+jig sync --update anthropics  # apply, and show what changed
+```
+
+```
+anthropics  7029232 -> f17010c
+
+  ~ anthropics/claude-api        description  73t -> 267t  (+194)
+  ~ anthropics/frontend-design   description  99t ->  51t   (-48)
+  ~ anthropics/canvas-design     body only
+```
+
+Description changes are counted apart from body changes because the description is what
+every session pays for. Applying an update rewrites one SHA line in
+`library/sources.yaml`, so upstream drift passes through review as a one-line diff
+instead of a vendored copy.
 
 ## Stages and handoff
 
@@ -175,11 +278,16 @@ title**. If it is a job title, don't.
 
 ```
 PRINCIPLES.md          principles, sources, and what enforces each one
+bootstrap.sh           first-run setup: dependencies, cache, verification
 core/                  always loaded: PREAMBLE.md and the /profile skill
-library/               skills, agents and MCP definitions, one copy each
+library/sources.yaml   registered skill repositories — links and pinned SHAs
+library/cache/<ns>/    fetched repository contents (gitignored, disposable)
+library/               local skills, agents and MCP definitions, one copy each
 profiles/<name>/       profile.yaml + BRIEF.md — the tool-neutral source
+adapters/sources.py    source registry, cache and skill resolution (tool-neutral)
 adapters/claude/       the only place that knows Claude Code syntax
 bin/jig                dispatch only
+bin/jig-log-skill      the hook that records skill invocations
 build/claude/<name>/   compiled output, what --plugin-dir points at (gitignored)
 tests/golden/          expected compiler output
 probe/results/         measurements, with the commands that produced them
@@ -187,8 +295,9 @@ probe/results/         measurements, with the commands that produced them
 
 ## Status
 
-Early. Five profiles work end to end; `library/` is deliberately empty until
-repeated work shows what deserves to become a skill. Documentation is Korean
+Early. Five profiles work end to end. Skills come from registered open-source
+repositories; the profiles are currently in the wide-open discovery phase described
+above, waiting on `jig usage` data before they are narrowed. Documentation is Korean
 apart from this file, and evals are not written yet.
 
 Claims marked `[M]` were measured on this machine against Claude Code 2.1.228

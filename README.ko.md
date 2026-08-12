@@ -40,11 +40,17 @@ Claude Code 2.1.228 에서 실측했다 ([`probe/results/growth.md`](probe/resul
 ## 설치
 
 ```bash
-git clone https://github.com/by-su/jigkit ~/jigkit
-echo 'export PATH="$HOME/jigkit/bin:$PATH"' >> ~/.zshrc
+git clone https://github.com/by-su/jigkit
+cd jigkit
+./bootstrap.sh
 ```
 
-Claude Code, `python3`, PyYAML 이 필요하다.
+어디에 클론해도 된다. `bootstrap.sh` 는 자기 위치에서 경로를 유도하므로 하드코딩이 없다.
+Claude Code · `python3` · PyYAML · `git` 을 확인하고, 등록된 스킬 소스를
+`library/cache/` 로 받고, `jig doctor` 로 실제 동작을 확인한다. 다시 실행해도 안전하다.
+
+PATH 는 **출력만 한다** — 셸 설정을 말없이 고치지 않는다. `--path` 를 주면 추가해 주고,
+`--no-sync` 를 주면 네트워크를 타지 않는다.
 
 ## 사용
 
@@ -59,6 +65,18 @@ jig growth 0 10 25 50       # 스킬 N개일 때의 비용 곡선 실측
 jig golden [--update]       # 컴파일러 회귀 검사
 jig argv developer          # 기동 인자만 출력 (실행하지 않음)
 jig new <이름>              # 프로필 생성
+```
+
+스킬 소스:
+
+```bash
+jig source add <url>        # 오픈소스 스킬 저장소 등록
+jig source list             # 등록된 소스와 동기화 상태
+jig sync [소스]             # 고정된 커밋으로 받는다
+jig sync --check            # 업데이트가 있는지만 확인 (아무것도 안 건드림)
+jig sync --update [소스]    # 적용하고 무엇이 바뀌었는지 보여준다
+jig skills [패턴]           # 쓸 수 있는 스킬과 그 비용
+jig usage [프로젝트]        # 무엇이 실제로 불렸는지
 ```
 
 ## 프로필의 정의
@@ -79,6 +97,86 @@ profiles/developer/
 프로필은 페르소나가 아니라 **무엇을 읽고, 무엇을 쓰고, 무엇을 못 만지는지**로 정의된다.
 [`PRINCIPLES.md`](PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다) 를 보라 —
 이 설계에 대한 가장 강한 공개 반론을 숨기지 않고 남겨뒀다.
+
+## 스킬 소스
+
+쓸 만한 스킬은 이미 공개돼 있다. 저장소를 **링크로** 등록한다 — 이 저장소에 커밋되는
+것은 링크와 고정된 커밋 SHA 뿐이다.
+
+```bash
+jig source add https://github.com/anthropics/skills
+jig sync
+jig skills
+```
+
+`library/sources.yaml` 이 링크와 SHA 를 갖는다. 저장소 내용은 `library/cache/<ns>/` 로
+내려오고 gitignore 된다 — 이 프로젝트가 관리하는 것이 아니라 다운로드 결과다.
+언제든 지워도 되고 `jig sync` 가 복원한다.
+
+프로필은 id 로 켜거나, 글롭으로 켠다:
+
+```yaml
+skills: ["anthropics/*"]                     # 발견 단계 — 통째로
+skills: [anthropics/pdf, anthropics/xlsx]    # 측정한 뒤
+```
+
+스킬 디렉터리는 컴파일된 플러그인에서 평탄화된다(`anthropics-pdf`). 그래서 두 소스가
+같은 이름의 스킬을 가져도 부딪히지 않는다. `SKILL.md` 옆의 `scripts/` · `references/` ·
+`templates/` 는 통째로 따라오는데, 기동 시 읽히는 것은 설명뿐이라 세션 비용이 0이다.
+
+### 넓게 시작하고, 측정으로 좁힌다
+
+스킬 마흔 개의 본문을 다 읽고 무엇을 켤지 정하는 것은 현실적이지 않다. 그래서 프로필은
+전부 켠 상태로 출발하고, 하네스가 **무엇이 실제로 불리는지**를 기록한다.
+
+`anthropics/skills` 18개로 실측했다 ([`probe/results/growth.md`](probe/results/growth.md)):
+
+| `developer` | 기동 토큰 | 스킬당 |
+|---|---:|---:|
+| 스킬 0 | 15,625 | — |
+| 스킬 18 (`anthropics/*`) | 18,445 | 157 |
+| 스킬 32 (`+ obra/*`) | 19,213 | 112 |
+
+`anthropics/skills` 는 스킬당 157 토큰 — 합성 스킬로 잰 70–161 범위의 위쪽 끝이다.
+두 번째 소스가 스킬당 싼 것은 설명이 짧기 때문이고, 이는 같은 결론의 반복이다 —
+**비용을 정하는 것은 스킬 개수가 아니라 설명 길이다.**
+
+그다음 `jig usage` 가 무엇이 불렸고 무엇이 선언만 됐는지 보여준다:
+
+```
+developer
+  anthropics/brand-guidelines           12회   최근 2026-08-12
+  선언했지만 한 번도 안 불림 — 15개
+```
+
+좁히는 건 한 줄 편집이다. **자동으로 지우지 않는다.** 50세션에 한 번 불린 스킬이 그 한
+번에 결정적일 수 있고, 빈도 카운터는 그걸 알 수 없다.
+
+기록은 컴파일러가 각 프로필 플러그인 안에 심는 `PreToolUse` 훅이 한다. 프로젝트의
+`.harness/skill-usage.jsonl` 에 한 줄 붙이고 **항상 exit 0** 이라, 훅이 깨져도 세션을
+막지 못한다.
+
+### 업데이트
+
+스킬은 데이터가 아니라 **에이전트에게 주는 지시문**이다. 상류가 조용히 바뀌면 에이전트
+행동이 리뷰 없이 바뀐다. 그래서 확인과 적용을 분리한다.
+
+```bash
+jig sync --check              # 소스당 ls-remote 한 번. 아무것도 안 건드린다
+jig sync --update anthropics  # 적용하고, 무엇이 바뀌었는지 보여준다
+```
+
+```
+anthropics  7029232 -> f17010c
+
+  ~ anthropics/claude-api        설명 변경  73t -> 267t (+194)
+  ~ anthropics/frontend-design   설명 변경  99t ->  51t  (-48)
+  ~ anthropics/canvas-design     본문만 변경
+```
+
+설명 변경을 본문 변경과 따로 세는 이유는, 매 세션이 내는 값이 설명이기 때문이다.
+업데이트를 적용하면 `library/sources.yaml` 의 SHA 한 줄이 바뀐다 — 상류 변화가 벤더링된
+사본이 아니라 **한 줄 diff** 로 리뷰를 통과한다.
 
 ## 단계와 핸드오프
 
@@ -162,11 +260,16 @@ jig doctor qa
 
 ```
 PRINCIPLES.md          원칙, 출처, 그리고 각각을 무엇이 강제하는가
+bootstrap.sh           첫 설치: 의존성 확인, 캐시 하이드레이션, 동작 검증
 core/                  항상 로드: PREAMBLE.md 와 /profile 스킬
-library/               스킬·에이전트·MCP 정의. 한 벌씩만
+library/sources.yaml   등록된 스킬 저장소 — 링크와 고정 SHA
+library/cache/<ns>/    받아둔 저장소 내용 (gitignore, 지워도 되는 파생물)
+library/               로컬 스킬·에이전트·MCP 정의. 한 벌씩만
 profiles/<name>/       profile.yaml + BRIEF.md — 도구 중립 원본
+adapters/sources.py    소스 등록·캐시·스킬 해석 (도구 중립)
 adapters/claude/       Claude Code 문법을 아는 유일한 곳
 bin/jig                dispatch 만
+bin/jig-log-skill      스킬 호출을 기록하는 훅
 build/claude/<name>/   컴파일 산출물. --plugin-dir 가 가리키는 곳 (gitignore)
 tests/golden/          기대 컴파일 출력
 probe/results/         실측 결과와 그것을 만든 명령
@@ -174,9 +277,9 @@ probe/results/         실측 결과와 그것을 만든 명령
 
 ## 상태
 
-초기다. 프로필 다섯 개가 처음부터 끝까지 동작한다. `library/` 는 **의도적으로 비어 있다** —
-반복되는 작업이 드러나서 스킬로 승격할 값이 확인될 때까지 두려는 것이다.
-문서는 이 파일 말고는 한국어이고, eval 은 아직 없다.
+초기다. 프로필 다섯 개가 처음부터 끝까지 동작한다. 스킬은 등록한 오픈소스 저장소에서
+온다. 프로필은 지금 위에서 설명한 **넓게 켜 둔 발견 단계**에 있고, `jig usage` 데이터가
+쌓이기를 기다렸다가 좁힌다. 문서는 이 파일 말고는 한국어이고, eval 은 아직 없다.
 
 `[M]` 표시된 주장은 이 기기의 Claude Code 2.1.228 에서 실측했고, 그것을 만든 명령까지
 기록돼 있다. 확인 못 한 주장은 `[?]` 와 함께 **어떻게 확인하면 답이 나오는지**를 적어뒀다.
