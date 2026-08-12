@@ -59,6 +59,8 @@ for cmd in [
     'git -C "/path with space" commit',        # 따옴표 안의 공백
     "/usr/bin/git commit -m x",                # 절대경로 호출
     "JIG_TOUCHED_BYPASS_TYPO=1 git commit",    # 오타난 우회는 우회가 아니다
+    'git commit -m "docs: A && B"',            # 따옴표 안의 operator
+    'git commit -m "fix #12 (urgent)"',        # `#` 는 주석이 아니다
 ]:
     check(f"트리거: {cmd!r}", gate.is_git_commit(cmd), True)
 
@@ -77,6 +79,10 @@ for cmd in [
     "JIG_TOUCHED_BYPASS=1 git commit -m x",
     "cd foo && JIG_TOUCHED_BYPASS=1 git commit -m x",
     "JIG_TOUCHED_BYPASS=1 git --git-dir .git commit",   # 분리된 옵션 인자와 함께
+    # 따옴표 안의 operator 때문에 탈출구가 거절되면 안 된다.
+    'JIG_TOUCHED_BYPASS=1 git commit -m "docs: explain A && B"',
+    'JIG_TOUCHED_BYPASS=1 git commit -m "docs: A; B"',
+    'JIG_TOUCHED_BYPASS=1 git commit -m "fix #12 (urgent)"',
 ]:
     check(f"우회 인식: {cmd!r}", gate.is_bypassed(cmd), True)
 

@@ -47,8 +47,36 @@ _GIT_COMMIT_RE = re.compile(
 _ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
-def _shell_segments(command: str) -> list[str]:
-    return re.split(r"[;&|()\n]+", command)
+_OPERATOR_CHARS = ";&|()"
+
+
+def _segments(command: str) -> list[list[str]]:
+    """따옴표를 존중하며 shell operator 로 나눈 토큰 목록.
+
+    먼저 `;`·`&&` 로 자르고 조각마다 `shlex.split` 을 돌리면 **따옴표 안의 operator 도
+    잘린다.** `git commit -m "docs: A && B"` 가 그렇게 깨져서 따옴표 불균형이 되고,
+    파싱 실패 경로로 빠져 **명시적 우회가 거절**됐다. 안전한 방향이긴 하나
+    탈출구가 안 먹히는 건 그것대로 문제다.
+
+    그래서 자르기 전에 토큰화한다 — `punctuation_chars` 로 operator 를 토큰으로 얻고,
+    그 경계에서 나눈다.
+    """
+    lex = shlex.shlex(command, posix=True, punctuation_chars=_OPERATOR_CHARS)
+    lex.whitespace_split = True
+    lex.commenters = ""  # 커밋 메시지의 `#` 를 주석 시작으로 보면 안 된다
+
+    segments: list[list[str]] = []
+    current: list[str] = []
+    for tok in lex:
+        if tok and set(tok) <= set(_OPERATOR_CHARS):
+            if current:
+                segments.append(current)
+            current = []
+        else:
+            current.append(tok)
+    if current:
+        segments.append(current)
+    return segments
 
 
 def _scan(command: str) -> tuple[bool, bool]:
@@ -62,18 +90,19 @@ def _scan(command: str) -> tuple[bool, bool]:
     "같은 세그먼트에서 `git` 토큰 바로 앞의 대입 접두사" 일 때만 인정한다.
     `BYPASS=1 echo hi; git commit` 은 우회가 아니다.
     """
+    try:
+        segments = _segments(command)
+    except ValueError:
+        # 토큰화 실패(따옴표 불균형 등). 트리거는 넓게 잡고 우회는 인정하지 않는다 —
+        # 둘 다 **게이트가 켜진 채로 남는** 방향이다.
+        return (bool(_GIT_COMMIT_RE.search(command)), False)
+
     calls: list[bool] = []  # git commit 호출별로 "우회됐는가"
 
-    for seg in _shell_segments(command):
-        try:
-            toks = shlex.split(seg)
-        except ValueError:
-            # 파싱 실패. 트리거는 넓게 잡고 우회는 인정하지 않는다 —
-            # 둘 다 **게이트가 켜진 채로 남는** 방향이다.
-            if _GIT_COMMIT_RE.search(seg):
-                calls.append(False)
-            continue
-
+    for toks in segments:
+        # `git` 토큰이 실행 위치인지까지는 엄밀히 보지 않는다. `echo git commit` 처럼
+        # 인자로 등장해도 호출 후보가 된다 — **의도적으로 허용한 오탐**이다.
+        # 실제 commit 이 없으면 막아도 무해하고, 있으면 all(calls) 가 지켜 준다.
         for i, t in enumerate(toks):
             if t != "git" and not t.endswith("/git"):
                 continue
