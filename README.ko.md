@@ -76,7 +76,7 @@ jig sync [소스]             # 고정된 커밋으로 받는다
 jig sync --check            # 업데이트가 있는지만 확인 (아무것도 안 건드림)
 jig sync --update [소스]    # 적용하고 무엇이 바뀌었는지 보여준다
 jig skills [패턴]           # 쓸 수 있는 스킬과 그 비용
-jig usage [프로젝트]        # 무엇이 실제로 불렸는지
+jig usage [--project P]     # 무엇이 실제로 불렸는지 (전 프로젝트 합산)
 ```
 
 ## 프로필의 정의
@@ -282,6 +282,9 @@ bin/jig-log-skill      스킬 호출을 기록하는 훅
 build/claude/<name>/   컴파일 산출물. --plugin-dir 가 가리키는 곳 (gitignore)
 tests/golden/          기대 컴파일 출력
 probe/results/         실측 결과와 그것을 만든 명령
+
+~/.jigkit/skill-usage.jsonl   기록된 스킬 호출 — 저장소 밖에 둔다.
+                              캐시와 달리 재생성이 안 되는 데이터이기 때문이다
 ```
 
 ## 상태

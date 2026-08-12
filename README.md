@@ -83,7 +83,7 @@ jig sync [source]           # fetch to the pinned commit
 jig sync --check            # is there an update? touches nothing
 jig sync --update [source]  # apply, showing what changed
 jig skills [pattern]        # what is available, and what it costs
-jig usage [project]         # what actually got invoked
+jig usage [--project P]     # what actually got invoked, across all projects
 ```
 
 ## How a profile is defined
@@ -302,6 +302,9 @@ bin/jig-log-skill      the hook that records skill invocations
 build/claude/<name>/   compiled output, what --plugin-dir points at (gitignored)
 tests/golden/          expected compiler output
 probe/results/         measurements, with the commands that produced them
+
+~/.jigkit/skill-usage.jsonl   recorded skill invocations — outside the repo,
+                              because unlike the cache it cannot be regenerated
 ```
 
 ## Status
