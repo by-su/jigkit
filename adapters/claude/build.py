@@ -239,12 +239,17 @@ def install_usage_hook(out: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
 
+    # [M] 훅은 **동기적으로** 막는다 — sleep 8 을 걸면 스킬 호출마다 8초가 그대로
+    # 더해진다. 한 줄 append 는 밀리초지만, 디스크가 차거나 NFS 가 멎으면 매 스킬
+    # 호출이 함께 멎는다. timeout 이 그 상한을 실제로 거는 것도 쟀다
+    # (probe/results/skill-usage.md). 타임아웃된 훅은 스킬을 막지 않는다.
     write_readback(out / "hooks" / "hooks.json", json.dumps({
         "hooks": {
             "PreToolUse": [{
                 "matcher": "Skill",
                 "hooks": [{"type": "command",
-                           "command": "${CLAUDE_PLUGIN_ROOT}/hooks/log-skill"}],
+                           "command": "${CLAUDE_PLUGIN_ROOT}/hooks/log-skill",
+                           "timeout": 5}],
             }],
         },
     }, indent=2, ensure_ascii=False) + "\n")
