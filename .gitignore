@@ -1,4 +1,5 @@
 build/
+library/cache/
 probe/sandbox/
 probe/results/*/raw/
 __pycache__/

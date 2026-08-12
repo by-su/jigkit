@@ -1,0 +1,261 @@
+{
+  "profile": "designer",
+  "skills": [
+    {
+      "id": "anthropics/algorithmic-art",
+      "dir": "anthropics-algorithmic-art",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "b2ca295de7f9c86c",
+      "description_tokens": 81
+    },
+    {
+      "id": "anthropics/brand-guidelines",
+      "dir": "anthropics-brand-guidelines",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "e48840db6ea772ce",
+      "description_tokens": 59
+    },
+    {
+      "id": "anthropics/canvas-design",
+      "dir": "anthropics-canvas-design",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "1f0341e58d0b1cfc",
+      "description_tokens": 72
+    },
+    {
+      "id": "anthropics/claude-api",
+      "dir": "anthropics-claude-api",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "dce2a3949ea1163a",
+      "description_tokens": 267
+    },
+    {
+      "id": "anthropics/doc-coauthoring",
+      "dir": "anthropics-doc-coauthoring",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "b964e4c3ffe13f66",
+      "description_tokens": 107
+    },
+    {
+      "id": "anthropics/docx",
+      "dir": "anthropics-docx",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "3d715bd2a94f2ac6",
+      "description_tokens": 208
+    },
+    {
+      "id": "anthropics/frontend-design",
+      "dir": "anthropics-frontend-design",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "4eabc66183767153",
+      "description_tokens": 51
+    },
+    {
+      "id": "anthropics/internal-comms",
+      "dir": "anthropics-internal-comms",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "1bd16f3a211585bc",
+      "description_tokens": 82
+    },
+    {
+      "id": "anthropics/mcp-builder",
+      "dir": "anthropics-mcp-builder",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "09dbc5304106f999",
+      "description_tokens": 69
+    },
+    {
+      "id": "anthropics/pdf",
+      "dir": "anthropics-pdf",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "69e2ac9eb2bbe288",
+      "description_tokens": 109
+    },
+    {
+      "id": "anthropics/pptx",
+      "dir": "anthropics-pptx",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "cd5f211f026c6e1a",
+      "description_tokens": 183
+    },
+    {
+      "id": "anthropics/skill-creator",
+      "dir": "anthropics-skill-creator",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "b2bfe91d69ca9999",
+      "description_tokens": 79
+    },
+    {
+      "id": "anthropics/slack-gif-creator",
+      "dir": "anthropics-slack-gif-creator",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "1aec3adac439874d",
+      "description_tokens": 56
+    },
+    {
+      "id": "anthropics/template",
+      "dir": "anthropics-template",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "38c88f722b574a92",
+      "description_tokens": 17
+    },
+    {
+      "id": "anthropics/theme-factory",
+      "dir": "anthropics-theme-factory",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "598ddfa9784ae2a8",
+      "description_tokens": 65
+    },
+    {
+      "id": "anthropics/web-artifacts-builder",
+      "dir": "anthropics-web-artifacts-builder",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "4e532be18d3769b8",
+      "description_tokens": 72
+    },
+    {
+      "id": "anthropics/webapp-testing",
+      "dir": "anthropics-webapp-testing",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "8320d78c856340fa",
+      "description_tokens": 51
+    },
+    {
+      "id": "anthropics/xlsx",
+      "dir": "anthropics-xlsx",
+      "source": "anthropics",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "sha256": "77ac2688d9064586",
+      "description_tokens": 237
+    },
+    {
+      "id": "obra/brainstorming",
+      "dir": "obra-brainstorming",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "d15f54e073ccf2a0",
+      "description_tokens": 49
+    },
+    {
+      "id": "obra/dispatching-parallel-agents",
+      "dir": "obra-dispatching-parallel-agents",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "b011107f17188e0b",
+      "description_tokens": 26
+    },
+    {
+      "id": "obra/executing-plans",
+      "dir": "obra-executing-plans",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "78a07800ee99a586",
+      "description_tokens": 26
+    },
+    {
+      "id": "obra/finishing-a-development-branch",
+      "dir": "obra-finishing-a-development-branch",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "a2afe045ea677114",
+      "description_tokens": 25
+    },
+    {
+      "id": "obra/receiving-code-review",
+      "dir": "obra-receiving-code-review",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "59361179fc922517",
+      "description_tokens": 58
+    },
+    {
+      "id": "obra/requesting-code-review",
+      "dir": "obra-requesting-code-review",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "0ec3e6df8e809ada",
+      "description_tokens": 26
+    },
+    {
+      "id": "obra/subagent-driven-development",
+      "dir": "obra-subagent-driven-development",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "102d254f065317f6",
+      "description_tokens": 21
+    },
+    {
+      "id": "obra/systematic-debugging",
+      "dir": "obra-systematic-debugging",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "5ab44290779cd788",
+      "description_tokens": 22
+    },
+    {
+      "id": "obra/test-driven-development",
+      "dir": "obra-test-driven-development",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "a4126a9c5f17be3c",
+      "description_tokens": 19
+    },
+    {
+      "id": "obra/using-git-worktrees",
+      "dir": "obra-using-git-worktrees",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "48c8a1040e378e0c",
+      "description_tokens": 49
+    },
+    {
+      "id": "obra/using-superpowers",
+      "dir": "obra-using-superpowers",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "5b1650e78b3ad9c2",
+      "description_tokens": 38
+    },
+    {
+      "id": "obra/verification-before-completion",
+      "dir": "obra-verification-before-completion",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "b529822bdac4b197",
+      "description_tokens": 56
+    },
+    {
+      "id": "obra/writing-plans",
+      "dir": "obra-writing-plans",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "d43fb38f3078227c",
+      "description_tokens": 21
+    },
+    {
+      "id": "obra/writing-skills",
+      "dir": "obra-writing-skills",
+      "source": "obra",
+      "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
+      "sha256": "aba546cca0b311c3",
+      "description_tokens": 24
+    }
+  ]
+}

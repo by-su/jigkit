@@ -1,0 +1,19 @@
+# 오픈소스 스킬 저장소 등록부.
+#
+# 여기에는 **링크와 SHA 만** 산다. 저장소 내용은 library/cache/ 로 받아두고
+# 커밋하지 않는다 (.gitignore). 캐시는 지워도 되며 `jig sync` 로 복원된다.
+#
+#   jig source add https://github.com/anthropics/skills
+#   jig sync                  등록된 ref 대로 캐시를 맞춘다
+#   jig sync --check          최신 SHA 만 확인 (캐시·이 파일 불변)
+#   jig sync --update <ns>    최신으로 올리고 무엇이 바뀌었는지 보여준다
+#
+# ref 는 손으로 적지 않는다 — jig sync 가 받은 커밋을 되써넣는다.
+
+sources:
+  anthropics:
+    ref: f17010c9bb483898c1d9c9f42dde2b3a98889434
+    repo: https://github.com/anthropics/skills
+  obra:
+    ref: 44c9b2d6e889982ac18c27d05a19fefe335194e1
+    repo: https://github.com/obra/superpowers

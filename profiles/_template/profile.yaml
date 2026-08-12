@@ -17,7 +17,8 @@ permissions:
     - "**/.env"
     - "**/*.pem"
 
-# 빈 채로 시작한다 (P01). 실제로 반복된 작업만 스킬로 승격한다.
+# 등록된 소스에서 id 로 켜거나(`anthropics/pdf`) 글롭으로 통째 켠다(`anthropics/*`).
+# `jig skills` 로 목록과 비용을, `jig usage` 로 실제 호출을 본다.
 skills: []
 agents: []
 

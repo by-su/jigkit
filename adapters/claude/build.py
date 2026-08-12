@@ -2,15 +2,22 @@
 """중립 profile.yaml + library/ -> Claude Code 플러그인 디렉터리.
 
 Claude Code 문법을 아는 곳은 이 파일과 launch 인자 조립뿐이다.
-스킬·에이전트는 library/ 에 한 벌만 살고, 여기서 프로필별로 복사된다.
+스킬은 등록된 오픈소스 캐시(`library/cache/`)나 로컬(`library/skills/`)에 한 벌만 살고,
+에이전트·MCP 도 마찬가지다. 여기서 프로필이 선언한 것만 골라 복사한다.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path, PurePosixPath
 
 import yaml
+
+# sources 는 도구 중립이라 adapters/ 바로 아래 산다. 어떻게 실행되든 잡히게 한다.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import sources  # noqa: E402
 
 HARNESS = Path(__file__).resolve().parents[2]
 LIBRARY = HARNESS / "library"
@@ -167,13 +174,15 @@ def build_system_prompt(profile: dict) -> str:
     return "\n\n---\n\n".join(p.strip() for p in parts) + "\n"
 
 
-def copy_components(profile: dict, out: Path) -> None:
-    """library/ 에서 이 프로필이 선언한 것만 복사한다."""
-    for sid in profile.get("skills") or []:
-        src = LIBRARY / "skills" / sid
-        if not (src / "SKILL.md").is_file():
-            raise BuildError(f"스킬 '{sid}' 이 없다: {src}/SKILL.md")
-        shutil.copytree(src, out / "skills" / sid)
+def copy_components(profile: dict, out: Path, skills: list[dict]) -> None:
+    """이 프로필이 선언한 것만 복사한다.
+
+    스킬은 `library/cache/<ns>/` (등록된 오픈소스) 또는 `library/skills/` (로컬)에서 온다.
+    `copytree` 라서 `SKILL.md` 뿐 아니라 `scripts/` · `references/` · `templates/` 가
+    통째로 따라온다. 부속 파일은 스킬이 호출될 때만 읽히므로 기동 비용이 0 이다 (P03).
+    """
+    for s in skills:
+        shutil.copytree(s["path"], out / "skills" / sources.out_dir(s))
 
     for aid in profile.get("agents") or []:
         src = LIBRARY / "agents" / f"{aid}.md"
@@ -183,8 +192,67 @@ def copy_components(profile: dict, out: Path) -> None:
         shutil.copy2(src, out / "agents" / f"{aid}.md")
 
 
+def _skill_hash(d: Path) -> str:
+    """스킬 디렉터리 내용 해시. 상류 사본을 커밋하지 않고도 무엇을 실었는지 고정된다."""
+    h = hashlib.sha256()
+    for f in sorted(p for p in d.rglob("*") if p.is_file()):
+        h.update(str(f.relative_to(d)).encode("utf-8"))
+        h.update(f.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def build_manifest(profile: dict, skills: list[dict]) -> dict:
+    """무엇을 어느 커밋에서 실었는지. golden 은 스킬 실물 대신 이걸 비교한다.
+
+    golden 의 일은 "컴파일러가 바뀌었나" 지 "업스트림이 바뀌었나" 가 아니다.
+    훅이 보고하는 `<프로필>:<디렉터리>` 를 원래 id 로 되돌리는 것도 이 표가 맡는다 [M].
+    """
+    registered = sources.load_sources()
+    return {
+        "profile": profile["name"],
+        "skills": [
+            {
+                "id": s["id"],
+                "dir": sources.out_dir(s),
+                "source": s.get("ns"),
+                "ref": (registered.get(s["ns"]) or {}).get("ref") if s.get("ns") else None,
+                "sha256": _skill_hash(s["path"]),
+                "description_tokens": s["tokens"],
+            }
+            for s in skills
+        ],
+    }
+
+
+def install_usage_hook(out: Path) -> None:
+    """스킬 호출 기록 훅을 **플러그인 안에** 심는다.
+
+    [M] 플러그인이 소유한 `hooks/hooks.json` 은 `--plugin-dir` 로 붙여도 발화하고
+    `${CLAUDE_PLUGIN_ROOT}` 가 확장된다 (probe/results/skill-usage.md).
+    그래서 `settings.json` 에 이 머신의 절대경로를 박지 않아도 되고,
+    golden 출력이 머신 독립을 유지한다.
+    """
+    src = HARNESS / "bin" / "jig-log-skill"
+    if not src.is_file():
+        raise BuildError(f"훅 스크립트가 없다: {src}")
+    dst = out / "hooks" / "log-skill"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+
+    write_readback(out / "hooks" / "hooks.json", json.dumps({
+        "hooks": {
+            "PreToolUse": [{
+                "matcher": "Skill",
+                "hooks": [{"type": "command",
+                           "command": "${CLAUDE_PLUGIN_ROOT}/hooks/log-skill"}],
+            }],
+        },
+    }, indent=2, ensure_ascii=False) + "\n")
+
+
 def compile_profile(name: str, project: Path) -> dict:
     profile = load_profile(name)
+    skills = sources.resolve(profile.get("skills"))
     out = BUILD / name
 
     # 결정적 출력을 위해 매번 지우고 다시 만든다. golden 비교가 성립하려면 필수다.
@@ -201,14 +269,17 @@ def compile_profile(name: str, project: Path) -> dict:
             "author": {"name": "arto"},
         }, indent=2, ensure_ascii=False) + "\n",
     )
-    copy_components(profile, out)
+    copy_components(profile, out, skills)
+    install_usage_hook(out)
+    write_readback(out / "manifest.json",
+                   json.dumps(build_manifest(profile, skills), indent=2, ensure_ascii=False) + "\n")
     write_readback(out / "settings.json",
                    json.dumps(build_settings(profile, project), indent=2, ensure_ascii=False) + "\n")
     write_readback(out / "mcp.json",
                    json.dumps(build_mcp(profile), indent=2, ensure_ascii=False) + "\n")
     write_readback(out / "system-prompt.md", build_system_prompt(profile))
 
-    return {"profile": profile, "out": out}
+    return {"profile": profile, "out": out, "skills": skills}
 
 
 def launch_argv(name: str, project: Path) -> list[str]:

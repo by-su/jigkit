@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""PreToolUse 훅 — 스킬 호출 한 건을 프로젝트의 `.harness/skill-usage.jsonl` 에 적는다.
+
+발견 단계에는 스킬을 글롭으로 통째 켜 둔다. 그 상태가 영구화되지 않으려면
+**무엇이 실제로 불리는지**가 쌓여야 한다. 이 파일이 그 기록을 만든다.
+
+[M] 페이로드에 `cwd` 가 있으므로 어느 프로젝트에 적을지 스스로 안다.
+`tool_input.skill` 은 `<플러그인>:<디렉터리>` 형식이고, 플러그인 이름은 프로필 이름과
+같다 (probe/results/skill-usage.md).
+
+어떤 오류에서도 **exit 0**. 통계 때문에 세션이 막히면 안 된다.
+"""
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def main() -> None:
+    payload = json.load(sys.stdin)
+    if payload.get("tool_name") != "Skill":
+        return
+
+    skill = str((payload.get("tool_input") or {}).get("skill") or "")
+    plugin, _, name = skill.partition(":")
+    cwd = payload.get("cwd")
+    if not (cwd and plugin and name):
+        return
+
+    record = json.dumps({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "session": payload.get("session_id"),
+        "plugin": plugin,
+        "dir": name,
+    }, ensure_ascii=False)
+
+    out = Path(cwd) / ".harness" / "skill-usage.jsonl"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("a", encoding="utf-8") as f:
+        f.write(record + "\n")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        pass
+    sys.exit(0)

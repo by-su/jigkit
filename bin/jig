@@ -24,6 +24,15 @@ jig — 프로필 하네스 (jigkit)
   jig doctor [프로필]           컴파일 + 예산·규칙 검사
   jig argv <프로필>             기동 인자만 출력 (실행하지 않음)
   jig new <이름>                템플릿에서 새 프로필 생성
+
+스킬 소스
+  jig source add <url> [--as N] 오픈소스 스킬 저장소를 등록한다 (링크 + SHA 만)
+  jig source list               등록된 소스와 동기화 상태
+  jig sync [소스]               등록된 ref 대로 캐시를 맞춘다
+  jig sync --check              최신 SHA 만 확인 (캐시·등록부 불변)
+  jig sync --update [소스]      최신으로 올리고 무엇이 바뀌었는지 보여준다
+  jig skills [패턴]             쓸 수 있는 스킬과 설명 토큰 비용
+  jig usage [프로젝트]          무엇이 실제로 불렸는지 (정리 판단 근거)
 USAGE
     ;;
   *)

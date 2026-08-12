@@ -2,6 +2,7 @@
 """jig 명령 구현. bin/jig 는 여기로 넘기기만 한다."""
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import shlex
@@ -10,7 +11,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from build import BUILD, BuildError, HARNESS, compile_profile, discover, launch_argv, load_profile, write_readback
+# sources 는 도구 중립이라 adapters/ 바로 아래 산다. build.py 도 같은 처리를 한다.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import sources  # noqa: E402
+from build import BUILD, BuildError, HARNESS, compile_profile, discover, launch_argv, load_profile, write_readback  # noqa: E402
+from sources import SourceError  # noqa: E402
 
 
 def die(msg: str) -> None:
@@ -79,8 +85,12 @@ def cmd_list() -> None:
         return
     for n in names:
         p = load_profile(n)
-        n_sk, n_ag = len(p.get("skills") or []), len(p.get("agents") or [])
-        n_mcp = len(p.get("mcp") or [])
+        try:
+            # 글롭이 들어가면 선언 줄 수와 실제 스킬 수가 다르다. 편 뒤에 센다.
+            n_sk = str(len(sources.resolve(p.get("skills"))))
+        except SourceError:
+            n_sk = "?"  # 캐시 미동기화. jig doctor 가 이유를 말한다.
+        n_ag, n_mcp = len(p.get("agents") or []), len(p.get("mcp") or [])
         print(f"  {n:<12} {p.get('title', ''):<10} 스킬 {n_sk} · 에이전트 {n_ag} · MCP {n_mcp}"
               f"   {p.get('summary', '')}")
 
@@ -91,6 +101,237 @@ def cmd_build(names: list[str], project: Path) -> None:
         print(f"built {n:<12} -> {out.relative_to(HARNESS)}")
 
 
+def _flag_value(args: list[str], flag: str) -> str | None:
+    if flag not in args:
+        return None
+    i = args.index(flag)
+    if i + 1 >= len(args):
+        die(f"{flag} 뒤에 값이 필요하다")
+    return args[i + 1]
+
+
+def cmd_source(rest: list[str]) -> None:
+    sub, args = (rest[0] if rest else "list"), rest[1:]
+
+    if sub == "list":
+        srcs = sources.load_sources()
+        if not srcs:
+            print("등록된 소스가 없다. `jig source add <url>` 로 등록한다.")
+            return
+        for ns, s in sorted(srcs.items()):
+            cached = sources.cached_sha(ns)
+            ref = str(s.get("ref") or "")
+            if cached is None:
+                state = "캐시 없음 — jig sync"
+            elif cached != ref:
+                state = f"캐시가 {cached[:7]} 로 어긋남 — jig sync"
+            else:
+                state = "동기화됨"
+            print(f"  {ns:<14} {ref[:7]}  {s.get('repo', '')}")
+            print(f"  {'':<14} {state}")
+
+    elif sub == "add":
+        if not args or args[0].startswith("-"):
+            die("jig source add <url> [--as <이름>]")
+        ns, sha = sources.add_source(args[0], _flag_value(args, "--as"))
+        print(f"등록했다: {ns}  {args[0]} @ {sha[:7]}")
+        print(f"  `jig sync {ns}` 로 받는다.")
+
+    else:
+        die(f"jig source <list|add> — 받은 것: {sub}")
+
+
+def _declarers(skill_id: str) -> list[str]:
+    """이 스킬을 **이름으로** 선언한 프로필. 글롭은 조용히 빠지므로 세지 않는다."""
+    return [n for n in discover() if skill_id in (load_profile(n).get("skills") or [])]
+
+
+def cmd_sync(rest: list[str]) -> None:
+    check, update = "--check" in rest, "--update" in rest
+    names = [r for r in rest if not r.startswith("-")]
+    srcs = sources.load_sources()
+    if not srcs:
+        die("등록된 소스가 없다. `jig source add <url>` 로 등록한다.")
+
+    targets = names or sorted(srcs)
+    if unknown := [n for n in targets if n not in srcs]:
+        die(f"등록되지 않은 소스: {', '.join(unknown)}. `jig source list` 로 확인.")
+
+    if check:
+        # ls-remote 한 번씩. 데이터 전송이 없고 캐시도 sources.yaml 도 건드리지 않는다.
+        stale = []
+        for ns in targets:
+            cur, latest = str(srcs[ns].get("ref") or ""), sources.ls_remote(srcs[ns]["repo"])
+            if latest == cur:
+                print(f"  {ns:<14} {cur[:7]}              최신")
+            else:
+                stale.append(ns)
+                print(f"  {ns:<14} {cur[:7]} -> {latest[:7]}   업데이트 있음")
+        if stale:
+            print(f"\n적용: jig sync --update {' '.join(stale)}")
+        return
+
+    for ns in targets:
+        if update:
+            _sync_update(ns, srcs)
+        else:
+            ref = sources.fetch(ns)
+            if srcs[ns].get("ref") != ref:
+                srcs[ns]["ref"] = ref
+                sources.save_sources(srcs)
+            print(f"synced {ns:<14} {ref[:7]}  스킬 {len(sources.discover_skills(ns))}")
+
+
+def _sync_update(ns: str, srcs: dict) -> None:
+    """최신으로 올리고 **무엇이 바뀌었는지** 스킬 단위로 보여준다.
+
+    스킬은 데이터가 아니라 에이전트에게 주는 지시문이다. 상류가 조용히 바뀌면
+    에이전트 행동이 리뷰 없이 바뀐다 — 그래서 적용 시점에 diff 를 사람에게 보여준다.
+    """
+    old = sources.cached_sha(ns) or str(srcs[ns].get("ref") or "") or None
+    new = sources.ls_remote(srcs[ns]["repo"])
+
+    if old == new:
+        print(f"  {ns:<14} {new[:7]}  이미 최신")
+        return
+
+    sources.fetch(ns, new)
+    srcs[ns]["ref"] = new
+    sources.save_sources(srcs)
+
+    if old is None:
+        print(f"  {ns:<14} 새로 받았다 {new[:7]} — 비교할 이전 상태가 없다")
+        return
+
+    print(f"\n{ns}  {old[:7]} -> {new[:7]}\n")
+    d = sources.compare(ns, old, new)
+    delta = 0
+
+    for a in d["added"]:
+        delta += a["tokens"]
+        print(f"  + {ns}/{a['name']:<24} 새 스킬 (~{a['tokens']}t)")
+    for name in d["removed"]:
+        who = _declarers(f"{ns}/{name}")
+        warn = f"   ⚠ {', '.join(who)} 가 이름으로 선언 중" if who else ""
+        print(f"  - {ns}/{name:<24} 삭제됨{warn}")
+    for m in d["modified"]:
+        if m["desc_changed"]:
+            diff = m["new_tokens"] - m["old_tokens"]
+            delta += diff
+            print(f"  ~ {ns}/{m['name']:<24} 설명 변경  "
+                  f"{m['old_tokens']}t -> {m['new_tokens']}t ({diff:+d})")
+        else:
+            print(f"  ~ {ns}/{m['name']:<24} 본문만 변경")
+
+    if not (d["added"] or d["removed"] or d["modified"]):
+        print("  (스킬에는 변화 없음)")
+    else:
+        print(f"\n  설명 토큰 {delta:+d}. sources.yaml 갱신됨 — `jig doctor` 로 예산을 다시 본다.")
+
+
+def cmd_skills(rest: list[str]) -> None:
+    pattern = next((r for r in rest if not r.startswith("-")), None)
+    if not sources.load_sources():
+        die("등록된 소스가 없다. `jig source add <url>` 로 등록한다.")
+
+    cat, missing = sources.catalog()
+    if missing:
+        print(f"⚠ 캐시 없는 소스: {', '.join(missing)} — `jig sync` 를 먼저 실행한다.\n",
+              file=sys.stderr)
+    if not cat:
+        die("스킬이 없다. `jig sync` 를 먼저 실행한다.")
+
+    ids = sorted(cat)
+    if pattern:
+        glob = pattern if ("*" in pattern or "?" in pattern) else f"*{pattern}*"
+        ids = fnmatch.filter(ids, glob)
+        if not ids:
+            die(f"'{pattern}' 에 맞는 스킬이 없다.")
+
+    srcs = sources.load_sources()
+    total = 0
+    for ns in sorted({cat[i]["ns"] for i in ids}):
+        ref = str(srcs.get(ns, {}).get("ref") or "")
+        mine = [i for i in ids if cat[i]["ns"] == ns]
+        print(f"\n{ns}  {srcs.get(ns, {}).get('repo', '')} @ {ref[:7]}  ({len(mine)} skills)\n")
+        for i in mine:
+            s = cat[i]
+            total += s["tokens"]
+            extras = ",".join(s["extras"])[:20]
+            print(f"  {i:<36} ~{s['tokens']:>4}t  {extras:<20}  {s['description'][:60]}")
+    print(f"\n합계 {len(ids)} 스킬 · 설명 ~{total:,}토큰 (전부 켤 경우 매 세션 비용)")
+
+
+def cmd_usage(rest: list[str], project: Path) -> None:
+    """무엇이 실제로 불렸는지. 발견 단계를 끝내는 근거가 여기서 나온다.
+
+    **자동 정리는 하지 않는다.** 50세션에 한 번 불리는 스킬이 그 한 번에 결정적일 수
+    있다. 숫자만 보여주고 자를지는 사람이 정한다.
+    """
+    only = _flag_value(rest, "--profile")
+    log = project / ".harness" / "skill-usage.jsonl"
+
+    events = []
+    if log.is_file():
+        for line in log.read_text(encoding="utf-8").splitlines():
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    sessions = {e.get("session") for e in events if e.get("session")}
+    print(f"스킬 호출 기록  {log}")
+    print(f"  세션 {len(sessions)}회 · 호출 {len(events)}건\n")
+    if not events:
+        print("아직 기록이 없다. 프로필 세션에서 스킬이 한 번이라도 불리면 쌓인다.")
+        return
+
+    for n in ([only] if only else discover()):
+        try:
+            skills = sources.resolve(load_profile(n).get("skills"))
+        except SourceError:
+            skills = []
+        dir_to_id = {sources.out_dir(s): s["id"] for s in skills}
+
+        counts: dict[str, int] = {}
+        last: dict[str, str] = {}
+        for e in events:
+            if e.get("plugin") != n:
+                continue
+            d = str(e.get("dir") or "")
+            counts[d] = counts.get(d, 0) + 1
+            last[d] = max(last.get(d, ""), str(e.get("ts") or ""))
+
+        if not counts and not skills:
+            continue
+
+        # 이 프로필로 세션을 돈 적이 없으면 미사용 목록은 정보가 아니라 소음이다.
+        if not counts:
+            print(f"{n}\n  이 프로젝트에서 호출 기록 없음 (선언 {len(skills)}개)\n")
+            continue
+
+        print(n)
+        for d, c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"  {dir_to_id.get(d, d):<34} {c:>4}회   최근 {last[d][:10]}")
+
+        unused = [s["id"] for s in skills if sources.out_dir(s) not in counts]
+        if unused:
+            print(f"  선언했지만 한 번도 안 불림 — {len(unused)}개")
+            for i in unused[:8]:
+                print(f"      {i}")
+            if len(unused) > 8:
+                print(f"      … 외 {len(unused) - 8}개")
+        print()
+
+    # core 플러그인 등 프로필이 아닌 호출.
+    other = sorted({str(e.get("plugin")) for e in events} - set(discover()))
+    if other:
+        print(f"(프로필 외 호출: {', '.join(other)})\n")
+
+    print("정리는 사람이 한다 — 드물게 불리는 스킬이 그 한 번에 결정적일 수 있다.")
+    print("좁히려면 profile.yaml 의 skills: 글롭을 실제로 쓰는 id 목록으로 바꾼다.")
+
+
 def cmd_doctor(names: list[str], project: Path) -> None:
     failed = False
     for n in names or discover():
@@ -98,10 +339,17 @@ def cmd_doctor(names: list[str], project: Path) -> None:
         out, p = built["out"], built["profile"]
         settings = json.loads((out / "settings.json").read_text(encoding="utf-8"))
         deny = settings.get("permissions", {}).get("deny", [])
-        n_sk = len(list((out / "skills").iterdir())) if (out / "skills").is_dir() else 0
+        skills = built["skills"]
+        sk_tokens = sum(s["tokens"] for s in skills)
         approx = len((out / "system-prompt.md").read_text(encoding="utf-8")) // 4
 
-        print(f"ok   {n:<12} 프롬프트 ~{approx}토큰 · 스킬 {n_sk} · deny {len(deny)}건")
+        print(f"ok   {n:<12} 프롬프트 ~{approx}토큰 · 스킬 {len(skills)} (설명 ~{sk_tokens}t)"
+              f" · deny {len(deny)}건")
+
+        # 파일은 복사되지만 실행 환경은 따라오지 않는다. 조용히 실패하기 전에 알린다.
+        if deps := [s["id"] for s in skills if "scripts" in s["extras"]]:
+            shown = ", ".join(deps[:3]) + (f" 외 {len(deps) - 3}" if len(deps) > 3 else "")
+            print(f"     note {n}: 런타임 의존성을 요구할 수 있는 스킬 {len(deps)}개 — {shown}")
 
         # [M] Write(...) 규칙은 차단되지 않는다. 조용히 틀리는 실패 모드라 여기서 잡는다.
         for rule in deny:
@@ -113,7 +361,18 @@ def cmd_doctor(names: list[str], project: Path) -> None:
             failed = True
 
     failed |= _check_handoff_graph(names or discover())
+    _check_source_drift()
     raise SystemExit(1 if failed else 0)
+
+
+def _check_source_drift() -> None:
+    """등록 SHA 와 캐시 HEAD 가 어긋났는지. 네트워크를 타지 않는다."""
+    for ns, s in sorted(sources.load_sources().items()):
+        cached, ref = sources.cached_sha(ns), str(s.get("ref") or "")
+        if cached is None:
+            print(f"     warn 소스 '{ns}' 캐시가 없다 — `jig sync {ns}`")
+        elif cached != ref:
+            print(f"     warn 소스 '{ns}' 캐시 {cached[:7]} ≠ 등록 {ref[:7]} — `jig sync {ns}`")
 
 
 def _check_handoff_graph(names: list[str]) -> bool:
@@ -208,9 +467,14 @@ def cmd_golden(names: list[str], project: Path, update: bool) -> None:
 
     settings.json 의 deny 규칙에 프로젝트 절대경로가 박히므로,
     golden 비교는 **고정된 가짜 프로젝트 경로**로 컴파일해 머신 독립적으로 만든다.
+
+    스킬 실물(`skills/`)은 비교에서 뺀다. golden 의 일은 "컴파일러가 바뀌었나" 지
+    "업스트림이 바뀌었나" 가 아니다. 넣으면 캐시를 gitignore 한 의미가 사라지고
+    상류가 바뀔 때마다 깨진다. 대신 `manifest.json`(id + SHA + 내용 해시)이 비교된다.
     """
     import filecmp
     project = Path("/__golden__")
+    ignore = filecmp.DEFAULT_IGNORES + ["skills"]
     golden = HARNESS / "tests" / "golden" / "claude"
     failed = False
     for n in names or discover():
@@ -220,14 +484,14 @@ def cmd_golden(names: list[str], project: Path, update: bool) -> None:
             import shutil
             if exp.exists():
                 shutil.rmtree(exp)
-            shutil.copytree(out, exp)
+            shutil.copytree(out, exp, ignore=shutil.ignore_patterns("skills"))
             print(f"updated golden/{n}")
             continue
         if not exp.is_dir():
             print(f"FAIL {n}: golden 이 없다. `jig golden --update {n}`")
             failed = True
             continue
-        cmp = filecmp.dircmp(out, exp)
+        cmp = filecmp.dircmp(out, exp, ignore=ignore)
         diffs = _walk_diff(cmp)
         if diffs:
             failed = True
@@ -247,13 +511,24 @@ def _walk_diff(cmp) -> list[str]:
 def main() -> None:
     args = sys.argv[1:]
     if not args:
-        die("사용법: jig <프로필> [프로젝트] | list | build | doctor | budget | golden | argv")
+        die("사용법: jig <프로필> [프로젝트] | list | source | sync | skills | usage | "
+            "build | doctor | budget | golden | argv")
     cmd, rest = args[0], args[1:]
     project = Path(os.environ.get("HNS_PROJECT") or os.getcwd()).resolve()
 
     try:
         if cmd == "list":
             cmd_list()
+        elif cmd == "source":
+            cmd_source(rest)
+        elif cmd == "sync":
+            cmd_sync(rest)
+        elif cmd == "skills":
+            cmd_skills(rest)
+        elif cmd == "usage":
+            if rest and Path(rest[0]).is_dir():
+                project, rest = Path(rest[0]).resolve(), rest[1:]
+            cmd_usage(rest, project)
         elif cmd == "build":
             cmd_build(rest, project)
         elif cmd == "doctor":
@@ -274,7 +549,7 @@ def main() -> None:
             if rest and Path(rest[0]).is_dir():
                 project, rest = Path(rest[0]).resolve(), rest[1:]
             cmd_run(cmd, project, rest)
-    except BuildError as e:
+    except (BuildError, SourceError) as e:
         die(str(e))
 
 

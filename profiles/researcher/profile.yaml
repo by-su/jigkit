@@ -14,11 +14,18 @@ permissions:
     - "**/.env"
     - "**/*.pem"
 
-skills: []
+# 발견 단계 — 등록한 소스를 통째로 켜 두었다.
+# 스킬 본문을 사람이 다 읽고 고를 수는 없으므로, 켜 놓고 `jig usage` 로 무엇이 실제로
+# 불리는지 재고 나서 개별 id 로 좁힌다. 좁히는 것은 이 줄 한 줄을 고치는 일이다.
+skills: ["anthropics/*", "obra/*"]
 agents: []
 mcp: []
 
-budget_tokens: 15000
+# 기동 토큰 상한. jig budget 이 실측해 대조한다.
+# [M] 발견 단계라 등록 소스를 통째로 켜 두었다 — 스킬 18개에 실측 18,445 토큰.
+# 스킬 0개 기준선도 이미 15,625 였다(상한이 그 사이 낡았다). probe/results/growth.md.
+# jig usage 로 정리한 뒤 다시 내린다.
+budget_tokens: 20000
 bundled_skills: false
 
 done_when:
