@@ -47,6 +47,35 @@ def discover() -> list[str]:
     )
 
 
+def discover_fixtures() -> list[str]:
+    """`_` 로 시작하는 디렉터리 중 **컴파일 가능한** 것.
+
+    `discover()` 는 `_` 접두사를 프로필이 아닌 것으로 거르지만, 그중 일부는 컴파일러
+    분기 커버리지를 위해 golden 이 지나가야 한다. 목록을 코드에 박으면 `_fixture2` 를
+    추가했을 때 조용히 빠지고 `ok` 만 찍힌다 — **커버리지가 있는 것처럼 보이는데 없는**
+    상태이고, 픽스처가 애초에 없애려던 실패 모드가 한 층 위에서 재생산된다.
+    그래서 여기도 글로빙한다.
+
+    판별은 `name` 이 디렉터리명과 맞는지로 한다. `_template` 은 `name: CHANGEME` 라
+    스스로 빠지므로 제외 목록이 필요 없다.
+    """
+    root = HARNESS / "profiles"
+    if not root.is_dir():
+        return []
+    found = []
+    for d in sorted(root.iterdir()):
+        f = d / "profile.yaml"
+        if not d.name.startswith("_") or not f.is_file():
+            continue
+        try:
+            data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        if data.get("name") == d.name:
+            found.append(d.name)
+    return found
+
+
 def load_profile(name: str) -> dict:
     f = HARNESS / "profiles" / name / "profile.yaml"
     if not f.is_file():

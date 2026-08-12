@@ -1,10 +1,9 @@
 {
   "mcpServers": {
     "example": {
-      "command": "npx",
+      "command": "echo",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-everything"
+        "jigkit: MCP 형식 예시. 실제 서버가 아니다."
       ],
       "env": {}
     }

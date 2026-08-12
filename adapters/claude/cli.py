@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import commands  # noqa: E402
 import sources  # noqa: E402
 import touched  # noqa: E402
-from build import BUILD, BuildError, HARNESS, compile_profile, discover, launch_argv, load_profile, write_readback  # noqa: E402
+from build import BUILD, BuildError, HARNESS, compile_profile, discover, discover_fixtures, launch_argv, load_profile, write_readback  # noqa: E402
 from sources import SourceError  # noqa: E402
 
 
@@ -68,6 +68,12 @@ def measure(argv: list[str], cwd: Path, runs: int = 2) -> int:
 
 
 def cmd_run(name: str, project: Path, extra: list[str]) -> None:
+    # `_` 접두사는 프로필이 아니다 (템플릿·픽스처). discover() 는 이미 그렇게 보는데
+    # 기동 경로만 그 규칙을 안 봐서, 이름이 맞는 픽스처는 그대로 세션이 떴다.
+    # `_template` 은 name 불일치로 **우연히** 막혀 있었을 뿐이다.
+    if name.startswith("_"):
+        die(f"'{name}' 은 프로필이 아니다 (템플릿·픽스처). `jig list` 로 확인.")
+
     argv = launch_argv(name, project)
     missing = record_state(name, project)
     p = load_profile(name)
@@ -412,7 +418,7 @@ def cmd_usage(rest: list[str]) -> None:
 
 def cmd_doctor(names: list[str], project: Path) -> None:
     failed = False
-    for n in names or discover():
+    for n in names or (discover() + discover_fixtures()):
         built = compile_profile(n, project)
         out, p = built["out"], built["profile"]
         settings = json.loads((out / "settings.json").read_text(encoding="utf-8"))
@@ -434,10 +440,16 @@ def cmd_doctor(names: list[str], project: Path) -> None:
             if rule.startswith("Write("):
                 print(f"     FAIL {n}: Write(...) 는 차단되지 않는다. Edit(...) 로 바꿔라 — {rule}")
                 failed = True
-        if p.get("mcp") and not (out / "mcp.json").is_file():
-            print(f"     FAIL {n}: mcp 를 선언했는데 mcp.json 이 없다")
-            failed = True
+        # 선언한 서버가 실제로 실렸는지 본다. 예전 검사는 `mcp.json` 파일 존재였는데
+        # `compile_profile` 이 write_readback 으로 **항상** 쓰므로 발화할 수 없었다 —
+        # 검사처럼 보이지만 아무것도 검사하지 않는 코드였다.
+        if declared := set(p.get("mcp") or []):
+            loaded = json.loads((out / "mcp.json").read_text(encoding="utf-8"))
+            if missing := declared - set(loaded.get("mcpServers") or {}):
+                print(f"     FAIL {n}: 선언한 MCP 서버가 mcp.json 에 없다 — {sorted(missing)}")
+                failed = True
 
+    # 픽스처는 단계가 아니므로 핸드오프 사슬에서 뺀다.
     failed |= _check_handoff_graph(names or discover())
     _check_source_drift()
     raise SystemExit(1 if failed else 0)
@@ -540,12 +552,6 @@ def cmd_growth(counts: list[int], project: Path) -> None:
         print(f"{n:>5}  {total:>10,}  {delta:>+8,}  {per:>7.0f}")
 
 
-# discover() 가 건너뛰는 `_` 접두사 픽스처. 실제 프로필이 아니지만 컴파일러의
-# agents/mcp/로컬 스킬 분기를 golden 이 매번 지나가게 한다 — 셋 다 구현만 돼 있고
-# 실행된 적이 없던 경로다. 이유는 profiles/_fixture/profile.yaml 머리말에 있다.
-GOLDEN_FIXTURES = ["_fixture"]
-
-
 def cmd_golden(names: list[str], project: Path, update: bool) -> None:
     """컴파일러 회귀 검사. build/ 는 커밋하지 않고 기대 출력만 커밋한다.
 
@@ -561,7 +567,7 @@ def cmd_golden(names: list[str], project: Path, update: bool) -> None:
     ignore = filecmp.DEFAULT_IGNORES + ["skills"]
     golden = HARNESS / "tests" / "golden" / "claude"
     failed = False
-    for n in names or (discover() + GOLDEN_FIXTURES):
+    for n in names or (discover() + discover_fixtures()):
         out = compile_profile(n, project)["out"]
         exp = golden / n
         if update:
