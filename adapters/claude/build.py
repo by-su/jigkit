@@ -137,13 +137,13 @@ def build_mcp(profile: dict) -> dict:
 def build_system_prompt(profile: dict) -> str:
     parts = [(HARNESS / "core" / "PREAMBLE.md").read_text(encoding="utf-8")]
 
-    role = HARNESS / "profiles" / profile["name"] / "ROLE.md"
-    if not role.is_file():
-        raise BuildError(f"{role} 이 없다.")
-    parts.append(role.read_text(encoding="utf-8"))
+    brief = HARNESS / "profiles" / profile["name"] / "BRIEF.md"
+    if not brief.is_file():
+        raise BuildError(f"{brief} 이 없다.")
+    parts.append(brief.read_text(encoding="utf-8"))
 
     if done := profile.get("done_when") or []:
-        lines = ["# 완료 정의", "", "아래를 전부 만족해야 이 단계가 끝난 것이다.", ""]
+        lines = ["# 완료 정의", "", "아래를 전부 만족해야 이 프로필의 작업이 끝난 것이다.", ""]
         for item in done:
             if isinstance(item, dict) and "cmd" in item:
                 lines.append(f"- [실행] {item['cmd']}")
@@ -197,7 +197,7 @@ def compile_profile(name: str, project: Path) -> dict:
         json.dumps({
             "name": name,
             "version": "0.1.0",
-            "description": f"jigkit 단계 프로필 — {profile.get('title', name)}",
+            "description": f"jigkit 프로필 — {profile.get('title', name)}",
             "author": {"name": "arto"},
         }, indent=2, ensure_ascii=False) + "\n",
     )

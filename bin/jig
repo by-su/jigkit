@@ -13,11 +13,11 @@ case "${1:-}" in
     cp -R "$src" "$dst"
     /usr/bin/sed -i '' "s/CHANGEME/$1/g" "$dst/profile.yaml"
     echo "만들었다: profiles/$1"
-    echo "  1) profiles/$1/profile.yaml 편집  2) profiles/$1/ROLE.md 작성  3) jig doctor $1"
+    echo "  1) profiles/$1/profile.yaml 편집  2) profiles/$1/BRIEF.md 작성  3) jig doctor $1"
     ;;
   ""|-h|--help|help)
     cat <<'USAGE'
-jig — 단계 프로필 하네스
+jig — 프로필 하네스 (jigkit)
 
   jig <프로필> [프로젝트경로]   해당 프로필로 Claude 세션을 연다
   jig list                      프로필 목록

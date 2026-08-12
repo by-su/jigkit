@@ -36,7 +36,7 @@
 - 출처: Anthropic, *Building Effective Agents* — "add multi-step agentic systems only when
   simpler solutions fall short" / OpenAI, *A practical guide to building agents* —
   "maximize a single agent's capabilities first"
-- 강제: 빌드 순서가 Phase 1(프로필 1개)에서 멈춰도 쓸 수 있게 설계한다. `bin/jig` 는
+- 강제: 빌드 순서가 마일스톤 1(프로필 1개)에서 멈춰도 쓸 수 있게 설계한다. `bin/jig` 는
   dispatch 만 한다.
 - 등급: `[D]`
 
@@ -77,7 +77,7 @@
 
 - 출처: Anthropic, *Skill authoring best practices* — "narrow bridge with cliffs on both
   sides" vs "open field with no hazards"
-- 강제: 각 `ROLE.md` 가 자유도를 명시한다. 되돌리기 어려운 단계만 순서를 못 박는다.
+- 강제: 각 `BRIEF.md` 가 자유도를 명시한다. 되돌리기 어려운 단계만 순서를 못 박는다.
 - 등급: `[D]`
 
 ### P06 · 에이전트가 스스로 돌릴 수 있는 검사를 준다
@@ -188,7 +188,7 @@ Shrivu Shankar 는 커스텀 서브에이전트를 **"a brittle solution"** 이�
 그래서 이 하네스의 프로필은 **역할 연기가 아니라 단계 스코프**다.
 `profile.yaml` 은 "너는 디자이너다" 가 아니라 **무엇을 읽고(inputs) · 무엇을 쓸 수 있고
 (outputs) · 무엇을 쓰면 안 되는지(deny)** 로 역할을 규정한다.
-`ROLE.md` 도 정체성이 아니라 그 단계의 판단 기준과 완료 조건을 쓴다.
+`BRIEF.md` 도 정체성이 아니라 그 단계의 판단 기준과 완료 조건을 쓴다.
 
 **프로필을 추가할 때 자문할 것**: 지금 늘어난 것이 *단계*인가, 아니면 *직함*인가?
 직함이면 만들지 않는다.

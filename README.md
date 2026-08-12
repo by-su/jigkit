@@ -107,7 +107,7 @@ library/               ★ 스킬·에이전트·MCP 정의가 한 벌만 사는
   mcp/<id>.json
 profiles/<이름>/       ★ 도구 중립 단일 진실 원천
   profile.yaml         입출력·권한·스킬 id·MCP id·예산·완료 정의
-  ROLE.md              단계 지시
+  BRIEF.md             그 프로필의 순서·경계·자유도
 adapters/claude/       Claude Code 문법을 아는 유일한 곳 (build.py, cli.py)
 bin/jig                dispatch 만 한다
 build/claude/<n>/      컴파일 산출물 = 실제 --plugin-dir 대상 (gitignore)
@@ -122,7 +122,7 @@ probe/results/         실측 결과
 ```bash
 jig new researcher
 # 1) profiles/researcher/profile.yaml  — inputs/outputs/deny/done_when
-# 2) profiles/researcher/ROLE.md       — 순서·경계·자유도
+# 2) profiles/researcher/BRIEF.md       — 순서·경계·자유도
 jig doctor researcher
 ```
 
