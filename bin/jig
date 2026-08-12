@@ -42,6 +42,7 @@ jig — 프로필 하네스 (jigkit)
 jigkit 자체를 고칠 때
   jig touched [범위]              이 변경이 건드린 개념을 언급하는 문서
   jig docs --check                생성된 명령 블록이 최신인지
+  jig selftest                    커밋 게이트·문서 라우팅 단위 검사
 USAGE
     # <<< jig commands <<<
     ;;

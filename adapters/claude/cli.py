@@ -264,6 +264,16 @@ def cmd_skills(rest: list[str]) -> None:
     print(f"\n합계 {len(ids)} 스킬 · 설명 ~{total:,}토큰 (전부 켤 경우 매 세션 비용)")
 
 
+def cmd_selftest() -> None:
+    """게이트와 라우팅의 단위 검사.
+
+    false negative 가 이 장치의 진짜 위험이다 — 게이트가 안 뜨면 아무 일도 없는 것처럼
+    보인다. golden 은 컴파일러만, probe 는 "가능한가" 만 본다. 회귀는 여기서 잡는다.
+    """
+    proc = subprocess.run([sys.executable, str(HARNESS / "tests" / "test_gate.py")])
+    raise SystemExit(proc.returncode)
+
+
 def cmd_docs(rest: list[str]) -> None:
     """생성된 명령 블록을 갱신하거나(`--update`) 최신인지 검사한다(`--check`).
 
@@ -599,6 +609,8 @@ def main() -> None:
             cmd_touched(rest)
         elif cmd == "docs":
             cmd_docs(rest)
+        elif cmd == "selftest":
+            cmd_selftest()
         elif cmd == "build":
             cmd_build(rest, project)
         elif cmd == "doctor":

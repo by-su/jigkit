@@ -85,6 +85,7 @@ jig usage [--project P]         # what actually got invoked, across all projects
 # working on jigkit
 jig touched [range]             # which docs mention what this change touched
 jig docs --check                # are the generated command blocks current?
+jig selftest                    # unit-test the commit gate and doc routing
 ```
 <!-- <<< jig commands <<< -->
 
@@ -335,6 +336,21 @@ traceback instead of help when a dependency is missing.
 Four copies of the same fact had already drifted — from the very first commit, `cli.py`
 accepted `build`, `budget`, `growth` and `golden` while `jig --help` listed none of them,
 across four later edits to that help text. Generating the block closed it.
+
+### The gate's own failure mode is silence
+
+If the trigger stops matching, nothing appears — and nothing appearing is exactly what a
+passing run looks like. A naive `"git commit" in command` check already missed
+`git -c user.name=x commit` and a tab separator. False positives cost one extra glance;
+false negatives remove the mechanism, so the matcher errs toward over-matching.
+
+`jig selftest` covers the trigger cases, the bypass, token extraction (removed lines vs.
+new files vs. CLI surface), the stoplist, and a regression on the commit that started
+all of this. It needs no test framework:
+
+```bash
+jig selftest             # or: python3 tests/test_gate.py
+```
 
 ## Layout
 

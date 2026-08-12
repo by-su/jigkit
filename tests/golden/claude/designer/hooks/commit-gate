@@ -21,11 +21,34 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 BYPASS = "JIG_TOUCHED_BYPASS"
+
+# `git commit` 을 문자열 포함으로 찾으면 조용히 뚫린다 —
+# `git -c user.name=x commit`, `git<탭>commit`, `git --no-pager commit` 가 전부 빠진다.
+#
+# **비대칭이 설계를 정한다.** 오탐은 문서 목록을 한 번 더 보는 비용이지만,
+# 누락은 게이트가 아예 없는 것과 같다. 그래서 넉넉하게 잡는 쪽으로 편향시킨다
+# (`echo git commit` 에 반응해도 괜찮다). 다만 `commit-tree` 같은 plumbing 은 뺀다.
+_GIT_COMMIT = re.compile(
+    r"(?:^|[;&|(]|\s)"                  # 명령이 시작될 수 있는 자리
+    r"git"                              # git
+    r"(?:\s+(?:-[cC]\s*\S+|--\S+))*"    # 전역 옵션: -c k=v · -C path · --no-pager
+    r"\s+commit(?![\w-])"               # commit 서브커맨드 (commit-tree 제외)
+)
+
+
+def is_git_commit(command: str) -> bool:
+    return bool(_GIT_COMMIT.search(command))
+
+
+def is_bypassed(command: str) -> bool:
+    # 우회를 환경변수로 둔 이유 — 트랜스크립트에 흔적이 남는다.
+    return BYPASS in command
 
 
 def repo_root(cwd: str) -> Path | None:
@@ -51,10 +74,7 @@ def main() -> int:
         return 0
 
     command = str((payload.get("tool_input") or {}).get("command") or "")
-    if "git commit" not in command:
-        return 0
-    if BYPASS in command:
-        # 우회를 환경변수로 둔 이유 — 트랜스크립트에 흔적이 남는다.
+    if not is_git_commit(command) or is_bypassed(command):
         return 0
 
     cwd = payload.get("cwd")

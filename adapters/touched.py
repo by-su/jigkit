@@ -18,8 +18,13 @@ from pathlib import Path
 
 HARNESS = Path(__file__).resolve().parents[1]
 
-# 변경을 볼 코드 경로. 좁게 시작한다 — 넓히면 바로 소음이 된다.
-CODE_PATHS = ["adapters", "bin", "bootstrap.sh"]
+# 변경을 볼 경로.
+#
+# `adapters`·`bin`·`bootstrap.sh` 만으로 시작했는데 그건 너무 좁았다 — 프로필의
+# inputs/outputs 는 README 의 핸드오프 표에 그대로 적혀 있고, core 의 PREAMBLE·
+# /profile 스킬도 문서가 서술한다. 그쪽 변경이 문서와 어긋나도 게이트가 못 봤다.
+# `library/cache/` 는 gitignore 라 여기 들어와도 diff 가 안 생긴다.
+CODE_PATHS = ["adapters", "bin", "bootstrap.sh", "profiles", "core", "library"]
 
 # 갱신 대상인 문서. 여기 히트가 있는데 문서를 하나도 안 건드렸으면 게이트가 막는다.
 PRIMARY = [
@@ -56,6 +61,10 @@ _FLAG = re.compile(r"--([a-z][a-z0-9-]{2,})")
 _FILEISH = re.compile(r"[\w.-]*[\w-]+\.(?:jsonl|json|md|ya?ml|py|sh|txt)\b")
 _DOTDIR = re.compile(r"(?<![\w.])\.([a-z][a-z0-9_-]{2,})\b")
 _STRLIT = re.compile(r'"([a-z][a-z0-9_./-]{5,})"')
+# 확장자 없는 경로 세그먼트. 프로필의 `docs/decisions/{slug}.md` 를 바꿔도 토큰이 안
+# 나오던 구멍을 메운다 — 파일명 부분은 `.md` 필터에 걸려 버려지므로 디렉터리를 잡아야
+# README 핸드오프 표(`docs/decisions/…`)에 닿는다.
+_PATHSEG = re.compile(r"(?<![\w./-])([a-z][\w-]*/[a-z][\w-]*)")
 
 
 def _git(*args: str) -> str:
@@ -138,6 +147,8 @@ def extract_tokens(diff: str) -> dict[str, set[str]]:
             emit(m.group(0), "파일")
         for m in _DOTDIR.finditer(line):
             emit("." + m.group(1), "경로")
+        for m in _PATHSEG.finditer(line):
+            emit(m.group(1), "경로")
         for m in _STRLIT.finditer(line):
             emit(m.group(1), "문자열")
 

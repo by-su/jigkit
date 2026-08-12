@@ -66,6 +66,8 @@ COMMANDS = [
      "which docs mention what this change touched", "이 변경이 건드린 개념을 언급하는 문서"),
     ("dev", "docs --check", "docs --check",
      "are the generated command blocks current?", "생성된 명령 블록이 최신인지"),
+    ("dev", "selftest", "selftest",
+     "unit-test the commit gate and doc routing", "커밋 게이트·문서 라우팅 단위 검사"),
 ]
 
 # 마커는 **렌더링에 보이지 않는 주석**이어야 한다.
