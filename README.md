@@ -344,6 +344,14 @@ passing run looks like. A naive `"git commit" in command` check already missed
 `git -c user.name=x commit` and a tab separator. False positives cost one extra glance;
 false negatives remove the mechanism, so the matcher errs toward over-matching.
 
+The bypass errs the other way. Both the trigger and the bypass are decided from one
+`shlex` tokenization of the command, because two different models disagree at the edges —
+a regex that cannot parse `git --git-dir .git commit` will happily accept a bypass that
+belongs to some other command. Shell semantics decide it: `VAR=1 cmd` applies to that
+simple command only, so `JIG_TOUCHED_BYPASS=1 echo hi; git commit` is **not** a bypass.
+When the command cannot be tokenized at all, the trigger stays broad and the bypass is
+refused — both keep the gate on.
+
 `jig selftest` covers the trigger cases, the bypass, token extraction (removed lines vs.
 new files vs. CLI surface), the stoplist, and a regression on the commit that started
 all of this. It needs no test framework:

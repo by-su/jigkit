@@ -76,14 +76,20 @@ for cmd in [
 for cmd in [
     "JIG_TOUCHED_BYPASS=1 git commit -m x",
     "cd foo && JIG_TOUCHED_BYPASS=1 git commit -m x",
+    "JIG_TOUCHED_BYPASS=1 git --git-dir .git commit",   # 분리된 옵션 인자와 함께
 ]:
     check(f"우회 인식: {cmd!r}", gate.is_bypassed(cmd), True)
 
+# shell 의미론상 `VAR=1 cmd` 는 **그 단순 명령에만** 붙는다. 세그먼트를 넘어가면
+# 우회가 아니다 — 여기가 느슨하면 게이트가 조용히 꺼진다.
 for cmd in [
     "git commit -m x",
-    "echo JIG_TOUCHED_BYPASS; git commit -m x",      # 대입이 아니다
-    'git commit -m "JIG_TOUCHED_BYPASS=1 을 다룬다"',  # 커밋 메시지 안의 언급
-    "git commit -m x && JIG_TOUCHED_BYPASS=1 echo hi",  # commit 뒤에 온다
+    "echo JIG_TOUCHED_BYPASS; git commit -m x",         # 대입이 아니다
+    'git commit -m "JIG_TOUCHED_BYPASS=1 을 다룬다"',     # 커밋 메시지 안의 언급
+    "git commit -m x && JIG_TOUCHED_BYPASS=1 echo hi",   # commit 뒤에 온다
+    "JIG_TOUCHED_BYPASS=1 echo hi; git commit -m x",     # 다른 명령에 붙었다
+    "JIG_TOUCHED_BYPASS=1 echo git commit",              # 실제 git 실행이 아니다
+    "git --git-dir .git commit && JIG_TOUCHED_BYPASS=1 echo hi",  # 모델이 갈라지던 자리
 ]:
     check(f"우회 아님: {cmd!r}", gate.is_bypassed(cmd), False)
 
