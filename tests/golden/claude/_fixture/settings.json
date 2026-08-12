@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(//__golden__/docs/decisions/**)",
+      "Edit(//__golden__/docs/design/**)",
+      "Edit(//__golden__/docs/prd/**)",
+      "Edit(//__golden__/docs/research/**)",
+      "Edit(//__golden__/docs/review/**)",
+      "Edit(//__golden__/src/**)",
+      "Edit(//__golden__/tests/**)",
+      "Read(//__golden__/**/.env)"
+    ]
+  },
+  "disableBundledSkills": true
+}

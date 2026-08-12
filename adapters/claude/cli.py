@@ -540,6 +540,12 @@ def cmd_growth(counts: list[int], project: Path) -> None:
         print(f"{n:>5}  {total:>10,}  {delta:>+8,}  {per:>7.0f}")
 
 
+# discover() 가 건너뛰는 `_` 접두사 픽스처. 실제 프로필이 아니지만 컴파일러의
+# agents/mcp/로컬 스킬 분기를 golden 이 매번 지나가게 한다 — 셋 다 구현만 돼 있고
+# 실행된 적이 없던 경로다. 이유는 profiles/_fixture/profile.yaml 머리말에 있다.
+GOLDEN_FIXTURES = ["_fixture"]
+
+
 def cmd_golden(names: list[str], project: Path, update: bool) -> None:
     """컴파일러 회귀 검사. build/ 는 커밋하지 않고 기대 출력만 커밋한다.
 
@@ -555,7 +561,7 @@ def cmd_golden(names: list[str], project: Path, update: bool) -> None:
     ignore = filecmp.DEFAULT_IGNORES + ["skills"]
     golden = HARNESS / "tests" / "golden" / "claude"
     failed = False
-    for n in names or discover():
+    for n in names or (discover() + GOLDEN_FIXTURES):
         out = compile_profile(n, project)["out"]
         exp = golden / n
         if update:

@@ -356,6 +356,7 @@ bin/jig                dispatch 만
 bin/jig-log-skill      훅: 스킬 호출 기록
 bin/jig-commit-gate    훅: 커밋 직전 문서 영향 표시
 build/claude/<name>/   컴파일 산출물. --plugin-dir 가 가리키는 곳 (gitignore)
+profiles/_fixture/     프로필이 아니다 — 안 쓰이는 컴파일러 분기의 커버리지
 tests/golden/          기대 컴파일 출력
 probe/results/         실측 결과와 그것을 만든 명령
 

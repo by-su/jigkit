@@ -1,0 +1,13 @@
+{
+  "profile": "_fixture",
+  "skills": [
+    {
+      "id": "example",
+      "dir": "example",
+      "source": null,
+      "ref": null,
+      "sha256": "e0609c7259f30ec0",
+      "description_tokens": 10
+    }
+  ]
+}

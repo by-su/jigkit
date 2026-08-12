@@ -381,6 +381,7 @@ bin/jig                dispatch only
 bin/jig-log-skill      hook: records skill invocations
 bin/jig-commit-gate    hook: shows doc impact before a commit
 build/claude/<name>/   compiled output, what --plugin-dir points at (gitignored)
+profiles/_fixture/     not a profile — keeps unused compiler branches covered
 tests/golden/          expected compiler output
 probe/results/         measurements, with the commands that produced them
 
