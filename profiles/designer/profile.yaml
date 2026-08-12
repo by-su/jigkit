@@ -1,0 +1,29 @@
+name: designer
+title: 디자이너
+summary: PRD 를 만들 수 있는 형태로 옮기고, 화면과 상태를 빠짐없이 정한다
+
+inputs:
+  - docs/prd/{slug}.md
+outputs:
+  - docs/design/{slug}.md
+
+permissions:
+  # 다른 단계의 산출물은 build 가 outputs 에서 자동 유도해 차단한다.
+  # 여기에는 **아무 프로필도 소유하지 않는** 경로만 적는다 (예: .github/**).
+  deny_write: []
+  deny_read:
+    - "**/.env"
+    - "**/*.pem"
+
+skills: []
+agents: []
+mcp: []
+
+budget_tokens: 15000
+bundled_skills: false
+
+done_when:
+  - 모든 화면·상태에 빈 상태·로딩·에러·경계값이 정해져 있다
+  - PRD 의 성공 기준이 화면에서 어떻게 확인되는지 이어져 있다
+  - 구현이 선택해도 되는 것과 선택하면 안 되는 것이 구분돼 있다
+  - PRD 에 대한 질문은 직접 고치지 않고 "앞 단계로 되돌릴 질문"으로 적혔다

@@ -1,0 +1,34 @@
+name: reviewer
+title: 리뷰어
+summary: 만들어진 것이 앞 단계에서 약속한 것과 맞는지 확인하고, 어긋난 곳을 적는다
+
+inputs:
+  - docs/design/{slug}.md
+  - docs/prd/{slug}.md
+
+# 구현이 설계에서 이탈한 근거. 있으면 반드시 읽는다.
+inputs_optional:
+  - docs/decisions/{slug}.md
+outputs:
+  - docs/review/{slug}.md
+
+permissions:
+  # 다른 단계의 산출물은 build 가 outputs 에서 자동 유도해 차단한다.
+  # 여기에는 **아무 프로필도 소유하지 않는** 경로만 적는다 (예: .github/**).
+  deny_write: []
+  deny_read:
+    - "**/.env"
+    - "**/*.pem"
+
+skills: []
+agents: []
+mcp: []
+
+budget_tokens: 15000
+bundled_skills: false
+
+done_when:
+  - cmd: 테스트 스위트를 실제로 돌리고 결과를 붙인다
+  - 지적마다 근거(파일·줄 또는 실행 결과)가 붙어 있다
+  - 설계와 어긋난 곳이 "구현이 틀림 / 설계가 틀림 / 의도된 이탈" 중 무엇인지 판정돼 있다
+  - 고치지 않았다 — 무엇을 어떻게 고칠지만 적었다

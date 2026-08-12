@@ -1,0 +1,28 @@
+name: researcher
+title: 리서처
+summary: 판단에 필요한 사실을 모으고, 각 사실에 근거 등급을 붙인다
+
+inputs: []
+outputs:
+  - docs/research/{slug}.md
+
+permissions:
+  # 다른 단계의 산출물은 build 가 outputs 에서 자동 유도해 차단한다.
+  # 여기에는 **아무 프로필도 소유하지 않는** 경로만 적는다 (예: .github/**).
+  deny_write: []
+  deny_read:
+    - "**/.env"
+    - "**/*.pem"
+
+skills: []
+agents: []
+mcp: []
+
+budget_tokens: 15000
+bundled_skills: false
+
+done_when:
+  - 모든 주장에 근거 등급이 붙어 있다
+  - 출처가 서로 충돌한 곳은 어느 쪽을 택했는지와 함께 적혀 있다
+  - 확인 못 한 것은 [?] 로 남고, 무엇을 어떻게 확인하면 답이 나오는지 적혀 있다
+  - 결론보다 근거가 길다

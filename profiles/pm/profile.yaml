@@ -1,0 +1,30 @@
+name: pm
+title: PM
+summary: 무엇을 왜 만드는지 정하고, 판단 근거를 남긴다
+
+inputs:
+  - docs/research/{slug}.md
+
+outputs:
+  - docs/prd/{slug}.md
+
+permissions:
+  # 다른 단계의 산출물은 build 가 outputs 에서 자동 유도해 차단한다.
+  # 여기에는 **아무 프로필도 소유하지 않는** 경로만 적는다 (예: .github/**).
+  deny_write: []
+  deny_read:
+    - "**/.env"
+    - "**/*.pem"
+
+skills: []
+agents: []
+mcp: []
+
+budget_tokens: 15000
+bundled_skills: false
+
+done_when:
+  - PRD 에 해결하려는 문제와 그렇게 판단한 근거가 있다
+  - 범위 밖으로 뺀 것이 이유와 함께 적혀 있다
+  - 성공을 무엇으로 확인할지가 검증 가능한 형태로 적혀 있다
+  - 결정하지 못한 것은 [?] 로 남기고 무엇을 확인하면 답이 나오는지 적혀 있다
