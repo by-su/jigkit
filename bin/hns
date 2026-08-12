@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# hns — dispatch only. 로직은 adapters/ 에 있다 (P01).
+set -euo pipefail
+HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+case "${1:-}" in
+  new)
+    shift
+    [ $# -ge 1 ] || { echo "hns new <프로필이름>" >&2; exit 1; }
+    src="$HARNESS/profiles/_template"; dst="$HARNESS/profiles/$1"
+    [ -d "$src" ] || { echo "hns: 템플릿이 없다: $src" >&2; exit 1; }
+    [ -e "$dst" ] && { echo "hns: 이미 있다: $dst" >&2; exit 1; }
+    cp -R "$src" "$dst"
+    /usr/bin/sed -i '' "s/CHANGEME/$1/g" "$dst/profile.yaml"
+    echo "만들었다: profiles/$1"
+    echo "  1) profiles/$1/profile.yaml 편집  2) profiles/$1/ROLE.md 작성  3) hns doctor $1"
+    ;;
+  ""|-h|--help|help)
+    cat <<'USAGE'
+hns — 단계 프로필 하네스
+
+  hns <프로필> [프로젝트경로]   해당 프로필로 Claude 세션을 연다
+  hns list                      프로필 목록
+  hns doctor [프로필]           컴파일 + 예산·규칙 검사
+  hns argv <프로필>             기동 인자만 출력 (실행하지 않음)
+  hns new <이름>                템플릿에서 새 프로필 생성
+USAGE
+    ;;
+  *)
+    exec python3 "$HARNESS/adapters/claude/cli.py" "$@"
+    ;;
+esac

@@ -1,0 +1,27 @@
+name: CHANGEME
+title: CHANGEME
+summary: 한 줄 — 이 단계가 책임지는 것
+
+# 이 단계가 읽어야 하는 선행 산출물. 없으면 기동 시 경고한다.
+inputs: []
+
+# 이 단계가 쓸 수 있는 경로.
+outputs:
+  - docs/CHANGEME/{slug}.md
+
+permissions:
+  # 앞 단계 산출물은 입력이지 작업 대상이 아니다 (P08).
+  # 어댑터가 Edit(...) 로 컴파일한다 — Write(...) 는 차단되지 않는다 [M].
+  deny_write: []
+  deny_read:
+    - "**/.env"
+    - "**/*.pem"
+
+# 빈 채로 시작한다 (P01). 실제로 반복된 작업만 스킬로 승격한다.
+skills: []
+agents: []
+
+bundled_skills: false
+
+done_when:
+  - 산출물이 정해진 경로에 채워졌다

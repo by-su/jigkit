@@ -1,0 +1,6 @@
+{
+  "name": "harness-core",
+  "version": "0.1.0",
+  "description": "harness2 core — 전 프로필 공통. 핸드오프 규약과 프로필 전환.",
+  "author": { "name": "arto" }
+}
