@@ -1,63 +1,99 @@
 # jigkit
 
-**AI 코딩 에이전트용 프로필 하네스.** 작업 단계마다 로드되는 스킬·MCP·도구·권한을
-갈아끼워, 스킬 라이브러리가 커져도 한 세션이 지는 컨텍스트는 커지지 않게 한다.
+> 한국어: [README.ko.md](README.ko.md)
 
-목공의 **지그(jig)** 에서 이름을 따왔다. 지그는 공구가 정해진 경로 밖으로 못 나가게
-가두는 치구다 — 작업자의 숙련도와 무관하게 같은 결과가 나오게 하려고 존재한다.
-이 저장소가 하는 일이 그것이다. 규칙을 프롬프트로 부탁하지 않고 권한으로 가둔다.
+**A profile harness for AI coding agents.** It swaps the skills, MCP servers,
+tools and permissions loaded for each stage of work, so that a growing skill
+library does not grow the session.
 
-Claude Code 기준으로 만들었고, 프로필 내용은 도구 중립이라 Codex·agy 로 확장 가능하다.
-라이선스는 MIT.
+Named after the woodworking **jig** — the fixture that constrains a tool so it
+can only cut where it is supposed to. A jig exists to make the result
+repeatable regardless of who is operating. That is what this does to a coding
+agent: the rules live in permissions, not in prompts.
 
-원칙과 그 출처는 [`PRINCIPLES.md`](PRINCIPLES.md) 에 있다. 실측 근거는
-[`probe/results/phase0.md`](probe/results/phase0.md).
+Built for Claude Code. Profile content is tool-neutral, so adapters for other
+CLIs can be added without rewriting profiles. MIT licensed.
 
-## 쓰는 법
+## Why split profiles before the library is big
 
-```bash
-jig list                    # 프로필 목록 (스킬·에이전트·MCP 개수 포함)
-jig developer               # 현재 디렉터리를 프로젝트로 삼아 구현 단계 세션 시작
-jig developer ~/work/proj   # 프로젝트 경로 지정
-jig build [프로필]          # library/ + profile.yaml -> build/claude/<n>/
-jig doctor [프로필]         # 규칙 검사 (Write deny 오용 등)
-jig budget [프로필]         # 기동 토큰 실측 + 상한 대조 (모델 호출)
-jig growth 0 10 25 50       # 스킬 개수 대비 비용 곡선 실측
-jig golden [--update]       # 컴파일러 회귀 검사
-jig argv developer          # 기동 인자만 출력 (실행하지 않음)
-jig new <이름>              # 새 프로필
-```
+A skill's *description* is loaded at every session start, whether or not the
+skill is used. Only the body is deferred. Measured on Claude Code 2.1.228
+([`probe/results/growth.md`](probe/results/growth.md)):
 
-## 왜 미리 나누나
-
-스킬 하나가 **매 세션 항상** 지는 비용을 실측했다 —
-짧은 설명이면 ~70 토큰, 번들 스킬처럼 길면 ~161 토큰.
-선형이다([`probe/results/growth.md`](probe/results/growth.md)).
-
-| 라이브러리 총 스킬 | 안 나눴을 때 | 나눴을 때 (역할당 8개) |
+| Skills loaded | Session start tokens | Per skill |
 |---:|---:|---:|
-| 25 | +1.8k ~ +4.0k | +0.6k ~ +1.3k |
-| 50 | +3.4k ~ +8.1k | +0.6k ~ +1.3k |
-| 100 | +6.9k ~ +16.1k | +0.6k ~ +1.3k |
+| 0 | 12,069 | — |
+| 10 | 12,815 | 75 |
+| 25 | 13,820 | 70 |
+| 50 | 15,495 | 69 |
 
-프로필 하나의 오버헤드는 **213 토큰** — 스킬 3개 값이다.
-나누는 건 거의 공짜고, 안 나누면 선형으로 비싸진다.
-그래서 라이브러리가 작을 때 미리 나눠 둔다.
+Linear, at ~70 tokens for a short description and ~161 for a long one. A
+profile itself costs 213 tokens. So splitting is roughly free, and not
+splitting is linear:
 
-**스킬 설명은 짧게 쓴다.** 본문은 호출 시에만 로드되지만 설명은 전원이 매번 낸다.
+| Library size | Everything loaded | Per-profile (8 skills each) |
+|---:|---:|---:|
+| 25 | +1.8k – 4.0k | +0.6k – 1.3k |
+| 50 | +3.4k – 8.1k | +0.6k – 1.3k |
+| 100 | +6.9k – 16.1k | +0.6k – 1.3k |
 
-PATH 에 넣으려면:
+Below ~25 skills it barely matters. Past 50 it does. The cheap time to split is
+before you get there.
+
+**Keep skill descriptions short.** The body is loaded on invocation; the
+description is paid by every session, every time.
+
+## Install
 
 ```bash
-echo 'export PATH="$HOME/Desktop/jigkit/bin:$PATH"' >> ~/.zshrc
+git clone https://github.com/by-su/jigkit ~/jigkit
+echo 'export PATH="$HOME/jigkit/bin:$PATH"' >> ~/.zshrc
 ```
 
-## 단계와 핸드오프
+Requires Claude Code, `python3`, and PyYAML.
 
-단계 사이는 대화가 아니라 **파일**로 넘어간다. 앞 단계 산출물은 다음 단계에서
-**편집이 차단**되므로, 고쳐야 할 것 같으면 "앞 단계로 되돌릴 질문"으로 적힌다.
+## Use
 
-| 단계 | 읽는다 | 쓴다 |
+```bash
+jig list                    # profiles, with skill / agent / MCP counts
+jig developer               # start a session in the current directory
+jig developer ~/work/proj   # or in a given project
+jig build [profile]         # compile profiles into build/claude/<name>/
+jig doctor [profile]        # check rules and the handoff graph
+jig budget [profile]        # measure session-start tokens against the cap
+jig growth 0 10 25 50       # measure the cost curve for N skills
+jig golden [--update]       # regression-test the compiler
+jig argv developer          # print the launch argv without running it
+jig new <name>              # scaffold a profile
+```
+
+## How a profile is defined
+
+Two tool-neutral files. Nothing in them is Claude Code syntax.
+
+```
+profiles/developer/
+├── profile.yaml    inputs, outputs, permissions, skills, MCP, budget, done_when
+└── BRIEF.md        sequence, boundaries, latitude
+```
+
+Skills, subagents and MCP definitions live once in `library/` and are
+referenced by id, so several profiles can share one without copies or symlinks.
+`jig build` resolves all of it into `build/claude/<name>/` — a real Claude Code
+plugin plus its settings, MCP config and system prompt.
+
+A profile is defined by **what it reads, what it writes, and what it may not
+touch** — not by a persona. See
+[`PRINCIPLES.md`](PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다), which
+keeps the strongest published objection to this design rather than hiding it.
+
+## Stages and handoff
+
+Work moves between stages as **files**, not as conversation. A stage cannot edit
+the previous stage's output, so when it disagrees it has to write the objection
+down instead of quietly fixing it.
+
+| Profile | Reads | Writes |
 |---|---|---|
 | `researcher` | — | `docs/research/{slug}.md` |
 | `pm` | research | `docs/prd/{slug}.md` |
@@ -65,82 +101,96 @@ echo 'export PATH="$HOME/Desktop/jigkit/bin:$PATH"' >> ~/.zshrc
 | `developer` | design, prd (+review) | `src/**`, `tests/**`, `docs/decisions/{slug}.md` |
 | `reviewer` | prd, design (+decisions) | `docs/review/{slug}.md` |
 
-`jig doctor` 가 이 사슬이 끊겼는지 검사한다 — 아무도 안 만드는 문서를 기다리거나
-아무도 안 읽는 문서를 만들면 알려준다.
+`jig doctor` fails if this chain breaks — if a profile waits on a document
+nobody produces, or produces one nobody reads.
 
-### 쓰기 권한은 손으로 적지 않는다
-
-각 단계의 `deny_write` 는 **모든 프로필의 `outputs` 에서 자동 유도**된다:
+### Write permissions are derived, not written by hand
 
 ```
-deny_write = (모든 프로필의 outputs) − (내 outputs)
+deny_write = (every profile's outputs) − (this profile's outputs)
 ```
 
-그래서 프로필을 추가하면 **기존 프로필을 한 줄도 안 고쳐도** 나머지 전부가 새 산출물을
-못 쓰게 된다. `profile.yaml` 의 `permissions.deny_write` 에는 **아무 프로필도 소유하지
-않는 경로**만 적는다 (예: `.github/**`).
+Add a sixth profile and the other five are denied its output without editing a
+single one of their files. Maintaining that list by hand had already opened
+three holes before this was automated.
 
-한계: 이건 denylist 다. 아무도 소유하지 않는 `README.md` 같은 파일은 누구나 쓸 수 있다.
-목적이 **단계 경계 유지**이지 샌드박스가 아니라서 그렇게 뒀다.
+`permissions.deny_write` in `profile.yaml` is then only for paths **no profile
+owns** — for example `.github/**`.
 
-## 전환
+This is a denylist. Files no profile owns (`README.md`, `package.json`) stay
+writable by everyone. The goal is keeping stage boundaries, not sandboxing.
 
-**전환은 새 프로세스에서만 성립한다.** 로드된 스킬과 권한은 세션 도중 되돌릴 수 없다.
-세션 안에서 `/profile` 을 쓰면 완료 조건을 점검하고 다음 명령을 알려준다 —
-전환하는 척하지 않는다.
+## Switching
+
+**Switching happens at process boundaries.** Skills and permissions are bound
+when the process starts, and Claude cannot restart itself, so `/profile` inside
+a session does not pretend to switch. It checks the current profile's
+done-conditions, records state in `.harness/state.json`, and prints the command
+to run next.
 
 ```
 > /profile designer
-  ✓ developer 완료 조건: 3/4
-  ⚠ 테스트 미실행
-  다음: 이 세션을 닫고  jig designer
+  ✓ developer done-conditions: 3/4
+  ⚠ tests not run
+  next: close this session and run  jig designer
 ```
 
-## 구조
+## What isolation does and does not mean
 
-```
-PRINCIPLES.md          원칙 + 출처 + 강제 수단. 하네스의 헌법
-core/                  전 프로필 공통 플러그인 (PREAMBLE.md, /profile 스킬)
-library/               ★ 스킬·에이전트·MCP 정의가 한 벌만 사는 곳
-  skills/<id>/SKILL.md
-  agents/<id>.md
-  mcp/<id>.json
-profiles/<이름>/       ★ 도구 중립 단일 진실 원천
-  profile.yaml         입출력·권한·스킬 id·MCP id·예산·완료 정의
-  BRIEF.md             그 프로필의 순서·경계·자유도
-adapters/claude/       Claude Code 문법을 아는 유일한 곳 (build.py, cli.py)
-bin/jig                dispatch 만 한다
-build/claude/<n>/      컴파일 산출물 = 실제 --plugin-dir 대상 (gitignore)
-tests/golden/          컴파일러 회귀 기준
-probe/results/         실측 결과
-```
+**Does**, measured ([`probe/results/phase0.md`](probe/results/phase0.md)):
 
-## 프로필 추가
+- The session process contains only `core` and the active profile. Other
+  profiles' skills are never read, never tokenized, never invocable.
+- Bundled skills are off by default (12 skills → 1, about 1,776 tokens).
+- Only declared MCP servers load; `--strict-mcp-config` makes the session ignore
+  every other MCP configuration.
+- Previous stages' documents are denied at the permission layer, not requested
+  in a prompt.
+- Nothing is written to `~/.claude/settings.json`. Two profiles can run in two
+  terminals without touching each other.
 
-**코드 변경 0.** 파일 2개만 고친다.
+**Does not**:
+
+- Filesystem isolation. Broad `Bash` access can route around a deny rule.
+- Mid-session switching. Everything is decided at launch.
+- Context continuity. A switch starts a fresh conversation — the documents are
+  the handoff.
+
+## Adding a profile
 
 ```bash
-jig new researcher
-# 1) profiles/researcher/profile.yaml  — inputs/outputs/deny/done_when
-# 2) profiles/researcher/BRIEF.md       — 순서·경계·자유도
-jig doctor researcher
+jig new qa
+# 1) profiles/qa/profile.yaml  — inputs, outputs, done_when
+# 2) profiles/qa/BRIEF.md      — sequence, boundaries, latitude
+jig doctor qa
 ```
 
-프로필을 늘리기 전에 자문할 것 — **지금 늘어난 것이 단계인가, 직함인가?**
-직함이면 만들지 않는다 (`PRINCIPLES.md` 의 반론 절 참고).
+No code changes. Profiles are discovered by globbing `profiles/*/profile.yaml`;
+there is no registry file to update.
 
-## 격리가 뜻하는 것과 뜻하지 않는 것
+Before adding one, ask whether what you are adding is a **stage** or a **job
+title**. If it is a job title, don't.
 
-**뜻한다** `[M]`
-- 세션 프로세스에 core + 해당 프로필 플러그인만 들어간다. 다른 프로필의 스킬은
-  읽히지도 토큰화되지도 않는다.
-- 번들 스킬도 기본으로 끈다 (12개 → 1개, 약 1,776 토큰 절감).
-- **MCP 도 선언한 것만 싣는다** — `--strict-mcp-config` 로 다른 모든 MCP 설정을 무시한다.
-- 앞 단계 산출물은 `permissions.deny` 로 **실제 편집이 차단**된다.
-- `~/.claude/settings.json` 에 아무것도 쓰지 않는다. 두 프로필을 다른 터미널에서
-  동시에 띄워도 서로를 건드리지 않는다.
+## Layout
 
-**뜻하지 않는다**
-- 파일시스템 격리가 아니다. `Bash` 를 넓게 허용하면 deny 를 우회할 수 있다.
-- 세션 도중 전환이 아니다. 전부 기동 시점에 결정된다.
-- 전환하면 대화 맥락은 끊긴다. 그게 의도다 — 핸드오프는 문서로 한다.
+```
+PRINCIPLES.md          principles, sources, and what enforces each one
+core/                  always loaded: PREAMBLE.md and the /profile skill
+library/               skills, agents and MCP definitions, one copy each
+profiles/<name>/       profile.yaml + BRIEF.md — the tool-neutral source
+adapters/claude/       the only place that knows Claude Code syntax
+bin/jig                dispatch only
+build/claude/<name>/   compiled output, what --plugin-dir points at (gitignored)
+tests/golden/          expected compiler output
+probe/results/         measurements, with the commands that produced them
+```
+
+## Status
+
+Early. Five profiles work end to end; `library/` is deliberately empty until
+repeated work shows what deserves to become a skill. Documentation is Korean
+apart from this file, and evals are not written yet.
+
+Claims marked `[M]` were measured on this machine against Claude Code 2.1.228
+and record the command that produced them. Claims that could not be verified are
+marked `[?]` along with how to settle them.
