@@ -38,8 +38,9 @@ BYPASS = "JIG_TOUCHED_BYPASS"
 _GLOBAL_WITH_VALUE = {"-c", "-C", "--git-dir", "--work-tree", "--namespace",
                       "--exec-path", "--config-env"}
 
-# **shlex.split() 이 실패했을 때만** 쓰는 대비책 (따옴표 불균형 등).
-# 정상 경로에서는 쓰지 않는다 — 트리거와 우회가 서로 다른 모델을 보면 갈라진다.
+# **토큰화가 실패했을 때만** 쓰는 대비책 (따옴표가 진짜로 깨진 경우 등).
+# 정상 경로는 `_segments()` 의 shlex 토큰화다 — 트리거와 우회가 서로 다른 모델을
+# 보면 가장자리에서 갈라진다.
 _GIT_COMMIT_RE = re.compile(
     r"(?:^|[;&|(]|\s)git(?:\s+(?:-[cC]\s*\S+|--\S+))*\s+commit(?![\w-])")
 
