@@ -77,6 +77,7 @@ jig sync --check            # 업데이트가 있는지만 확인 (아무것도 
 jig sync --update [소스]    # 적용하고 무엇이 바뀌었는지 보여준다
 jig skills [패턴]           # 쓸 수 있는 스킬과 그 비용
 jig usage [--project P]     # 무엇이 실제로 불렸는지 (전 프로젝트 합산)
+jig touched [범위]          # 이 변경이 건드린 개념을 언급하는 문서
 ```
 
 ## 프로필의 정의
@@ -265,6 +266,33 @@ jig doctor qa
 추가하기 전에 자문할 것 — 지금 늘어나는 것이 **단계**인가 **직함**인가.
 직함이면 만들지 않는다.
 
+## jigkit 자체를 고칠 때
+
+문서는 코드에서 조용히 어긋난다. 여기서도 그랬다 — 스킬 사용 기록을 프로젝트별에서
+전역으로 옮기면서 문서 세 군데가 남았고, 누가 물어봐서야 찾았다.
+
+해결책은 파일에 적어 두는 권고가 아니다. 권고 층은 이미 한 번 실패했다. 대신 이
+저장소 안에서 에이전트가 `git commit` 을 실행하면 `PreToolUse` 훅이 그 커밋이 건드린
+개념을 언급하는 문서를 보여준다.
+
+```bash
+jig touched              # 같은 보고서를 직접
+jig touched HEAD~3       # 임의 범위로도
+```
+
+막는 것은 셋 다 참일 때뿐이다 — 코드가 바뀌었고, 그 개념을 언급하는 primary 문서가
+있고, **staged 에 `.md` 가 하나도 없다.** 그대로 진행하려면:
+
+```bash
+JIG_TOUCHED_BYPASS=1 git commit -m "..."
+```
+
+플래그가 아니라 환경변수인 이유는 **우회가 트랜스크립트에 흔적을 남기기 때문**이다.
+
+**이건 문서가 맞는지 검증하지 않는다.** 코드를 바꾸고 문서를 아예 안 보는 것만 막는다 —
+무관한 `.md` 한 줄만 staged 해도 통과한다. 산문이 여전히 참인지 판단하는 것은
+자동화되지 않는다 ([`probe/results/commit-gate.md`](probe/results/commit-gate.md)).
+
 ## 구조
 
 ```
@@ -277,8 +305,10 @@ library/               로컬 스킬·에이전트·MCP 정의. 한 벌씩만
 profiles/<name>/       profile.yaml + BRIEF.md — 도구 중립 원본
 adapters/sources.py    소스 등록·캐시·스킬 해석 (도구 중립)
 adapters/claude/       Claude Code 문법을 아는 유일한 곳
+adapters/touched.py    변경이 건드린 개념을 언급하는 문서 찾기 (도구 중립)
 bin/jig                dispatch 만
-bin/jig-log-skill      스킬 호출을 기록하는 훅
+bin/jig-log-skill      훅: 스킬 호출 기록
+bin/jig-commit-gate    훅: 커밋 직전 문서 영향 표시
 build/claude/<name>/   컴파일 산출물. --plugin-dir 가 가리키는 곳 (gitignore)
 tests/golden/          기대 컴파일 출력
 probe/results/         실측 결과와 그것을 만든 명령

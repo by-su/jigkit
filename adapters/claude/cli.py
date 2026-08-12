@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import sources  # noqa: E402
+import touched  # noqa: E402
 from build import BUILD, BuildError, HARNESS, compile_profile, discover, launch_argv, load_profile, write_readback  # noqa: E402
 from sources import SourceError  # noqa: E402
 
@@ -260,6 +261,17 @@ def cmd_skills(rest: list[str]) -> None:
             extras = ",".join(s["extras"])[:20]
             print(f"  {i:<36} ~{s['tokens']:>4}t  {extras:<20}  {s['description'][:60]}")
     print(f"\n합계 {len(ids)} 스킬 · 설명 ~{total:,}토큰 (전부 켤 경우 매 세션 비용)")
+
+
+def cmd_touched(rest: list[str]) -> None:
+    """이 변경이 건드린 개념을 언급하는 문서를 보여준다. **판정하지 않는다.**
+
+    문서가 맞는지는 기계가 알 수 없다. 여기서 없애는 것은 "조용히 안 보고 지나가는 것"
+    이지 판단 자체가 아니다. 그래서 실패로 끝나지 않는다.
+    """
+    rev = next((r for r in rest if not r.startswith("-")), None)
+    text, _ = touched.report(rev)
+    print(text)
 
 
 def usage_log_path() -> Path:
@@ -557,6 +569,8 @@ def main() -> None:
             cmd_skills(rest)
         elif cmd == "usage":
             cmd_usage(rest)
+        elif cmd == "touched":
+            cmd_touched(rest)
         elif cmd == "build":
             cmd_build(rest, project)
         elif cmd == "doctor":

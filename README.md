@@ -84,6 +84,7 @@ jig sync --check            # is there an update? touches nothing
 jig sync --update [source]  # apply, showing what changed
 jig skills [pattern]        # what is available, and what it costs
 jig usage [--project P]     # what actually got invoked, across all projects
+jig touched [range]         # which docs mention what this change touched
 ```
 
 ## How a profile is defined
@@ -285,6 +286,36 @@ there is no registry file to update.
 Before adding one, ask whether what you are adding is a **stage** or a **job
 title**. If it is a job title, don't.
 
+## Working on jigkit itself
+
+Documentation drifts from code silently. It happened here: the skill-usage log moved
+from per-project to global and three doc references were left behind, found only
+because someone asked.
+
+The fix is not a reminder in a file — an advisory layer had already failed. Instead,
+when an agent runs `git commit` inside this repository, a `PreToolUse` hook shows which
+documents mention what the commit touched:
+
+```bash
+jig touched              # the same report, on demand
+jig touched HEAD~3       # or over any range
+```
+
+It blocks only when all three hold: code changed, primary docs mention what changed,
+and **no `.md` is staged**. To proceed anyway:
+
+```bash
+JIG_TOUCHED_BYPASS=1 git commit -m "..."
+```
+
+An environment variable rather than a flag, so the bypass leaves a trace in the
+transcript.
+
+**This does not verify that documentation is correct.** It only prevents changing code
+without looking at the docs at all — staging one unrelated `.md` line satisfies it.
+Judging whether prose is still true is not automatable
+([`probe/results/commit-gate.md`](probe/results/commit-gate.md)).
+
 ## Layout
 
 ```
@@ -297,8 +328,10 @@ library/               local skills, agents and MCP definitions, one copy each
 profiles/<name>/       profile.yaml + BRIEF.md — the tool-neutral source
 adapters/sources.py    source registry, cache and skill resolution (tool-neutral)
 adapters/claude/       the only place that knows Claude Code syntax
+adapters/touched.py    which docs mention what a change touched (tool-neutral)
 bin/jig                dispatch only
-bin/jig-log-skill      the hook that records skill invocations
+bin/jig-log-skill      hook: records skill invocations
+bin/jig-commit-gate    hook: shows doc impact before a commit
 build/claude/<name>/   compiled output, what --plugin-dir points at (gitignored)
 tests/golden/          expected compiler output
 probe/results/         measurements, with the commands that produced them

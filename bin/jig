@@ -33,6 +33,9 @@ jig — 프로필 하네스 (jigkit)
   jig sync --update [소스]      최신으로 올리고 무엇이 바뀌었는지 보여준다
   jig skills [패턴]             쓸 수 있는 스킬과 설명 토큰 비용
   jig usage [--project P]       무엇이 실제로 불렸는지 (전 프로젝트 합산)
+
+jigkit 자체를 고칠 때
+  jig touched [범위]            이 변경이 건드린 개념을 언급하는 문서
 USAGE
     ;;
   *)

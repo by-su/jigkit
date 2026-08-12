@@ -224,33 +224,46 @@ def build_manifest(profile: dict, skills: list[dict]) -> dict:
     }
 
 
-def install_usage_hook(out: Path) -> None:
-    """스킬 호출 기록 훅을 **플러그인 안에** 심는다.
+def install_hooks(out: Path) -> None:
+    """훅을 **플러그인 안에** 심는다.
 
     [M] 플러그인이 소유한 `hooks/hooks.json` 은 `--plugin-dir` 로 붙여도 발화하고
     `${CLAUDE_PLUGIN_ROOT}` 가 확장된다 (probe/results/skill-usage.md).
     그래서 `settings.json` 에 이 머신의 절대경로를 박지 않아도 되고,
     golden 출력이 머신 독립을 유지한다.
-    """
-    src = HARNESS / "bin" / "jig-log-skill"
-    if not src.is_file():
-        raise BuildError(f"훅 스크립트가 없다: {src}")
-    dst = out / "hooks" / "log-skill"
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
 
-    # [M] 훅은 **동기적으로** 막는다 — sleep 8 을 걸면 스킬 호출마다 8초가 그대로
-    # 더해진다. 한 줄 append 는 밀리초지만, 디스크가 차거나 NFS 가 멎으면 매 스킬
-    # 호출이 함께 멎는다. timeout 이 그 상한을 실제로 거는 것도 쟀다
-    # (probe/results/skill-usage.md). 타임아웃된 훅은 스킬을 막지 않는다.
+    둘을 심는다.
+    - `log-skill`  스킬 호출 기록 (관찰 — 절대 막지 않는다)
+    - `commit-gate` 커밋 직전 문서 영향 주입 (jigkit 저장소 안에서만 동작)
+    """
+    for name in ("jig-log-skill", "jig-commit-gate"):
+        src = HARNESS / "bin" / name
+        if not src.is_file():
+            raise BuildError(f"훅 스크립트가 없다: {src}")
+        dst = out / "hooks" / name.removeprefix("jig-")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+
+    # [M] 훅은 **동기적으로** 막는다 — sleep 8 을 걸면 호출마다 8초가 그대로 더해진다.
+    # 한 줄 append 는 밀리초지만, 디스크가 차거나 NFS 가 멎으면 함께 멎는다.
+    # timeout 이 그 상한을 실제로 거는 것도 쟀다 (probe/results/skill-usage.md).
+    # 타임아웃된 훅은 동작을 막지 않는다 — 둘 다 알림 장치라 fail open 이 맞는 방향이다.
     write_readback(out / "hooks" / "hooks.json", json.dumps({
         "hooks": {
-            "PreToolUse": [{
-                "matcher": "Skill",
-                "hooks": [{"type": "command",
-                           "command": "${CLAUDE_PLUGIN_ROOT}/hooks/log-skill",
-                           "timeout": 5}],
-            }],
+            "PreToolUse": [
+                {
+                    "matcher": "Skill",
+                    "hooks": [{"type": "command",
+                               "command": "${CLAUDE_PLUGIN_ROOT}/hooks/log-skill",
+                               "timeout": 5}],
+                },
+                {
+                    "matcher": "Bash",
+                    "hooks": [{"type": "command",
+                               "command": "${CLAUDE_PLUGIN_ROOT}/hooks/commit-gate",
+                               "timeout": 10}],
+                },
+            ],
         },
     }, indent=2, ensure_ascii=False) + "\n")
 
@@ -275,7 +288,7 @@ def compile_profile(name: str, project: Path) -> dict:
         }, indent=2, ensure_ascii=False) + "\n",
     )
     copy_components(profile, out, skills)
-    install_usage_hook(out)
+    install_hooks(out)
     write_readback(out / "manifest.json",
                    json.dumps(build_manifest(profile, skills), indent=2, ensure_ascii=False) + "\n")
     write_readback(out / "settings.json",

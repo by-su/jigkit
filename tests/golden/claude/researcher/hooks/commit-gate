@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""PreToolUse 훅 — 커밋 직전에 문서 영향을 에이전트 컨텍스트로 **강제 주입**한다.
+
+왜 CLAUDE.md 가 아니라 훅인가: CLAUDE.md 는 P07 이 advisory 라고 못박은 층이고,
+이번에 문서를 놓친 것이 정확히 그 층의 실패였다. "에이전트가 기억해서 명령을 돌린다"
+로 "에이전트가 잊는 문제" 를 풀 수는 없다.
+
+[M] Bash 로도 PreToolUse 가 발화하고 `tool_input.command` 에 명령이 오며,
+`exit 2` 의 stderr 가 모델에게 원문 그대로 전달된다 (probe/results/commit-gate.md).
+
+**막는 조건은 셋 다 참일 때뿐이다.**
+  1. staged diff 가 코드를 건드렸다
+  2. 그 개념을 언급하는 primary 문서가 있다
+  3. staged 에 `.md` 가 하나도 없다
+
+이건 "문서가 맞는가" 를 판정하지 않는다. **"문서를 아예 안 봤다"** 만 본다.
+엉뚱한 문서 한 줄만 staged 해도 통과한다 — 그 약점을 알고 쓴다.
+
+어떤 오류에서도 통과시킨다(exit 0). 이건 보안 장치가 아니라 알림 장치다.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+BYPASS = "JIG_TOUCHED_BYPASS"
+
+
+def repo_root(cwd: str) -> Path | None:
+    """cwd 가 **jigkit 체크아웃**인지 본다.
+
+    스크립트 자기 위치로 하네스를 유도하지 않는다 — 이 파일은 빌드된 플러그인 안으로
+    복사되므로 깊이가 달라진다. 대신 cwd 의 git 루트가 jigkit 표식을 갖는지 확인한다.
+    체크아웃이 둘이어도 각자 자기 자신을 게이트한다.
+    """
+    proc = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+    root = Path(proc.stdout.strip())
+    marks = (root / "adapters" / "touched.py", root / "bin" / "jig",
+             root / "PRINCIPLES.md")
+    return root if all(m.exists() for m in marks) else None
+
+
+def main() -> int:
+    payload = json.load(sys.stdin)
+    if payload.get("tool_name") != "Bash":
+        return 0
+
+    command = str((payload.get("tool_input") or {}).get("command") or "")
+    if "git commit" not in command:
+        return 0
+    if BYPASS in command:
+        # 우회를 환경변수로 둔 이유 — 트랜스크립트에 흔적이 남는다.
+        return 0
+
+    cwd = payload.get("cwd")
+    if not cwd:
+        return 0
+    root = repo_root(cwd)
+    if root is None:
+        return 0  # jigkit 저장소 밖. 남의 프로젝트에서는 조용하다.
+
+    sys.path.insert(0, str(root / "adapters"))
+    import touched  # noqa: E402
+
+    if touched.staged_docs():
+        return 0  # 문서를 손대긴 했다. 맞게 고쳤는지는 판정하지 않는다.
+
+    text, has_primary = touched.report()
+    if not has_primary:
+        return 0
+
+    print(
+        "코드를 바꿨는데 문서 변경이 staged 되지 않았다.\n\n"
+        f"{text}\n\n"
+        "  고칠 문서가 있으면 고쳐서 함께 stage 한다.\n"
+        f"  고칠 게 없다고 판단했으면:  {BYPASS}=1 git commit ...\n"
+        "  (이 게이트는 문서가 맞는지 판정하지 않는다. 안 보고 지나가는 것만 막는다.)",
+        file=sys.stderr,
+    )
+    return 2
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:
+        sys.exit(0)  # 알림 장치가 작업을 막으면 안 된다.
