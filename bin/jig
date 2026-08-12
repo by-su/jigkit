@@ -32,7 +32,7 @@ jig — 프로필 하네스 (jigkit)
   jig sync --check              최신 SHA 만 확인 (캐시·등록부 불변)
   jig sync --update [소스]      최신으로 올리고 무엇이 바뀌었는지 보여준다
   jig skills [패턴]             쓸 수 있는 스킬과 설명 토큰 비용
-  jig usage [프로젝트]          무엇이 실제로 불렸는지 (정리 판단 근거)
+  jig usage [--project P]       무엇이 실제로 불렸는지 (전 프로젝트 합산)
 USAGE
     ;;
   *)

@@ -262,14 +262,30 @@ def cmd_skills(rest: list[str]) -> None:
     print(f"\n합계 {len(ids)} 스킬 · 설명 ~{total:,}토큰 (전부 켤 경우 매 세션 비용)")
 
 
-def cmd_usage(rest: list[str], project: Path) -> None:
+def usage_log_path() -> Path:
+    """전역 사용 기록. 정본은 `bin/jig-log-skill` 이 갖고 있고 여기서 같은 규칙을 쓴다.
+
+    훅은 빌드된 플러그인 안에서 독립 실행되므로 이 모듈을 임포트할 수 없다. 그래서
+    이 네 줄만 양쪽에 산다.
+    """
+    if env := os.environ.get("JIG_USAGE_LOG"):
+        return Path(env)
+    return Path.home() / ".jigkit" / "skill-usage.jsonl"
+
+
+def cmd_usage(rest: list[str]) -> None:
     """무엇이 실제로 불렸는지. 발견 단계를 끝내는 근거가 여기서 나온다.
+
+    기록은 프로젝트를 가로질러 한 곳에 모인다 — "라이브러리를 프로필별로 어떻게
+    나눌까" 는 한 프로젝트만 봐서는 답이 안 나오는 질문이기 때문이다.
+    프로젝트별로 보려면 `--project <경로>`.
 
     **자동 정리는 하지 않는다.** 50세션에 한 번 불리는 스킬이 그 한 번에 결정적일 수
     있다. 숫자만 보여주고 자를지는 사람이 정한다.
     """
     only = _flag_value(rest, "--profile")
-    log = project / ".harness" / "skill-usage.jsonl"
+    only_project = _flag_value(rest, "--project")
+    log = usage_log_path()
 
     events = []
     if log.is_file():
@@ -277,11 +293,18 @@ def cmd_usage(rest: list[str], project: Path) -> None:
             try:
                 events.append(json.loads(line))
             except json.JSONDecodeError:
-                continue
+                continue  # 훅이 쓰다 잘린 줄. 집계를 막지 않는다.
+
+    projects = sorted({str(e.get("project")) for e in events if e.get("project")})
+    if only_project:
+        want = str(Path(only_project).resolve())
+        events = [e for e in events if str(e.get("project")) == want]
 
     sessions = {e.get("session") for e in events if e.get("session")}
     print(f"스킬 호출 기록  {log}")
-    print(f"  세션 {len(sessions)}회 · 호출 {len(events)}건\n")
+    print(f"  세션 {len(sessions)}회 · 호출 {len(events)}건"
+          f" · 프로젝트 {len(projects)}곳" + (f" (필터: {only_project})" if only_project else ""))
+    print()
     if not events:
         print("아직 기록이 없다. 프로필 세션에서 스킬이 한 번이라도 불리면 쌓인다.")
         return
@@ -307,7 +330,8 @@ def cmd_usage(rest: list[str], project: Path) -> None:
 
         # 이 프로필로 세션을 돈 적이 없으면 미사용 목록은 정보가 아니라 소음이다.
         if not counts:
-            print(f"{n}\n  이 프로젝트에서 호출 기록 없음 (선언 {len(skills)}개)\n")
+            where = "이 프로젝트에" if only_project else "아직"
+            print(f"{n}\n  {where} 호출 기록 없음 (선언 {len(skills)}개)\n")
             continue
 
         print(n)
@@ -327,6 +351,12 @@ def cmd_usage(rest: list[str], project: Path) -> None:
     other = sorted({str(e.get("plugin")) for e in events} - set(discover()))
     if other:
         print(f"(프로필 외 호출: {', '.join(other)})\n")
+
+    if len(projects) > 1 and not only_project:
+        print("기록에 들어온 프로젝트:")
+        for p in projects:
+            print(f"  {p}")
+        print("  한 곳만 보려면: jig usage --project <경로>\n")
 
     print("정리는 사람이 한다 — 드물게 불리는 스킬이 그 한 번에 결정적일 수 있다.")
     print("좁히려면 profile.yaml 의 skills: 글롭을 실제로 쓰는 id 목록으로 바꾼다.")
@@ -526,9 +556,7 @@ def main() -> None:
         elif cmd == "skills":
             cmd_skills(rest)
         elif cmd == "usage":
-            if rest and Path(rest[0]).is_dir():
-                project, rest = Path(rest[0]).resolve(), rest[1:]
-            cmd_usage(rest, project)
+            cmd_usage(rest)
         elif cmd == "build":
             cmd_build(rest, project)
         elif cmd == "doctor":

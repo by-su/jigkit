@@ -152,20 +152,31 @@ synthetic skills. The second source is cheaper per skill only because its descri
 are terser, which is the same finding again: **description length sets the cost, not the
 skill count.**
 
-`jig usage` then reports what a profile invoked and what it declared but never called:
+`jig usage` then reports, **per profile**, what was invoked and what was declared but
+never called:
 
 ```
 developer
-  anthropics/brand-guidelines    12 calls   last 2026-08-12
-  declared but never invoked — 15
+  obra/test-driven-development    12 calls   last 2026-08-12
+  declared but never invoked — 30
+
+pm
+  anthropics/docx                  4 calls   last 2026-08-11
+  declared but never invoked — 31
 ```
 
-Narrowing is a one-line edit. **Nothing is pruned automatically**: a skill invoked once
-in fifty sessions may be decisive in that one session, and a counter cannot know that.
+Records accumulate in `~/.jigkit/skill-usage.jsonl` — one place, across every project.
+How to split a library between profiles is not a question one project can answer. Each
+record keeps its `project`, so `jig usage --project <path>` narrows when you want it.
 
-Recording is a `PreToolUse` hook the compiler writes into each profile plugin. It
-appends one line to the project's `.harness/skill-usage.jsonl` and always exits 0, so a
-broken hook can never block a session.
+Narrowing a profile is a one-line edit. **Nothing is pruned automatically**: a skill
+invoked once in fifty sessions may be decisive in that one session, and a counter cannot
+know that.
+
+Recording is a `PreToolUse` hook the compiler writes into each profile plugin. It appends
+one line and always exits 0, so a broken hook can never block a session — measured: only
+`exit 2` blocks, and a hook killed by its `timeout` lets the skill through
+([`probe/results/skill-usage.md`](probe/results/skill-usage.md)).
 
 ### Updating
 

@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
-"""PreToolUse 훅 — 스킬 호출 한 건을 프로젝트의 `.harness/skill-usage.jsonl` 에 적는다.
+"""PreToolUse 훅 — 스킬 호출 한 건을 **전역** 사용 기록에 적는다.
 
 발견 단계에는 스킬을 글롭으로 통째 켜 둔다. 그 상태가 영구화되지 않으려면
 **무엇이 실제로 불리는지**가 쌓여야 한다. 이 파일이 그 기록을 만든다.
 
-[M] 페이로드에 `cwd` 가 있으므로 어느 프로젝트에 적을지 스스로 안다.
-`tool_input.skill` 은 `<플러그인>:<디렉터리>` 형식이고, 플러그인 이름은 프로필 이름과
-같다 (probe/results/skill-usage.md).
+기록은 `~/.jigkit/skill-usage.jsonl` 한 곳에 모인다. 프로젝트별이 아닌 이유:
+"라이브러리를 프로필별로 어떻게 나눌까" 는 프로젝트를 가로지르는 판단이라 한 프로젝트의
+기록만 봐서는 답이 안 나온다. 그리고 이 데이터는 캐시와 달리 **재생성이 안 된다** —
+저장소 안에 두면 하네스를 다시 클론하거나 체크아웃이 둘이 되는 순간 흩어진다.
+프로젝트 구분은 레코드의 `project` 필드가 유지하므로 나중에 프로젝트별로도 볼 수 있다.
+
+[M] 페이로드에 `cwd` 와 `session_id` 가 있다. `tool_input.skill` 은
+`<플러그인>:<디렉터리>` 형식이고 플러그인 이름은 프로필 이름과 같다
+(probe/results/skill-usage.md).
 
 어떤 오류에서도 **exit 0**. 통계 때문에 세션이 막히면 안 된다.
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def log_path() -> Path:
+    if env := os.environ.get("JIG_USAGE_LOG"):
+        return Path(env)
+    return Path.home() / ".jigkit" / "skill-usage.jsonl"
 
 
 def main() -> None:
@@ -25,8 +38,7 @@ def main() -> None:
 
     skill = str((payload.get("tool_input") or {}).get("skill") or "")
     plugin, _, name = skill.partition(":")
-    cwd = payload.get("cwd")
-    if not (cwd and plugin and name):
+    if not (plugin and name):
         return
 
     record = json.dumps({
@@ -34,10 +46,13 @@ def main() -> None:
         "session": payload.get("session_id"),
         "plugin": plugin,
         "dir": name,
+        "project": payload.get("cwd"),
     }, ensure_ascii=False)
 
-    out = Path(cwd) / ".harness" / "skill-usage.jsonl"
+    out = log_path()
     out.parent.mkdir(parents=True, exist_ok=True)
+    # 이제 여러 프로젝트·여러 세션이 한 파일에 붙는다. O_APPEND 에 한 줄씩 쓰고,
+    # 줄 길이가 PIPE_BUF 보다 훨씬 짧아 섞이지 않는다.
     with out.open("a", encoding="utf-8") as f:
         f.write(record + "\n")
 
