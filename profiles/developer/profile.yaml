@@ -33,7 +33,7 @@ agents: []
 # 이 단계가 실제로 쓰는 MCP 서버만 (library/mcp/<id>.json). 기본은 없음.
 mcp: []
 
-# 기동 토큰 상한. hns budget 이 실측해 대조한다.
+# 기동 토큰 상한. jig budget 이 실측해 대조한다.
 budget_tokens: 15000
 
 # Claude Code 번들 스킬(dataviz, code-review, run …)을 로드할지.

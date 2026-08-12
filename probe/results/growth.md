@@ -1,10 +1,10 @@
 # 성장 곡선 실측 `[M:CC-SKILL-DESC-COST]`
 
 - 대상: Claude Code 2.1.228 / macOS · 2026-08-12
-- 방법: `hns growth 0 10 25 50` — 합성 스킬 N개짜리 플러그인을 만들어
+- 방법: `jig growth 0 10 25 50` — 합성 스킬 N개짜리 플러그인을 만들어
   `--output-format json` 의 usage 로 기동 토큰을 잰다. 캐시 편차 때문에
   **2회 실행 후 최솟값**을 쓴다.
-- 재현: `hns growth 0 10 25 50`
+- 재현: `jig growth 0 10 25 50`
 
 ## 결과
 

@@ -1,6 +1,6 @@
 # 하네스 원칙
 
-이 문서가 harness2 의 헌법이다. 프로필·런처·훅은 전부 여기서 정당화된다.
+이 문서가 jigkit 의 헌법이다. 프로필·런처·훅은 전부 여기서 정당화된다.
 
 원칙마다 네 칸을 갖는다 — **정의 / 출처 / 강제 수단 / 등급**.
 `강제 수단` 이 "프롬프트"뿐인 원칙은 **약한 원칙**이다. 약한 채로 오래 남은 원칙은
@@ -36,7 +36,7 @@
 - 출처: Anthropic, *Building Effective Agents* — "add multi-step agentic systems only when
   simpler solutions fall short" / OpenAI, *A practical guide to building agents* —
   "maximize a single agent's capabilities first"
-- 강제: 빌드 순서가 Phase 1(프로필 1개)에서 멈춰도 쓸 수 있게 설계한다. `bin/hns` 는
+- 강제: 빌드 순서가 Phase 1(프로필 1개)에서 멈춰도 쓸 수 있게 설계한다. `bin/jig` 는
   dispatch 만 한다.
 - 등급: `[D]`
 
@@ -48,7 +48,7 @@
   Anthropic, *Effective context engineering* — "the smallest set of high-signal tokens" /
   Chroma, *Context Rot* (18개 모델 실측) — "model performance varies significantly as input
   length changes, even on simple tasks"
-- 강제: 프로필마다 토큰 예산 상한. `hns doctor` 가 스킬 설명 + 시스템 프롬프트 크기를 재고
+- 강제: 프로필마다 토큰 예산 상한. `jig doctor` 가 스킬 설명 + 시스템 프롬프트 크기를 재고
   넘으면 실패한다.
 - 등급: `[D]` + `[M]`(Chroma 는 3자 실측)
 
@@ -67,7 +67,7 @@
 - 출처: Claude Code best practices — "Bloated CLAUDE.md files cause Claude to ignore your
   actual instructions" / Anthropic, *Effective context engineering* — 실패 모드는
   "hardcoding complex, brittle logic" 와 "vague, high-level guidance" 양쪽
-- 강제: `core/PREAMBLE.md` 줄 수 상한을 `hns doctor` 가 검사. 모든 줄은
+- 강제: `core/PREAMBLE.md` 줄 수 상한을 `jig doctor` 가 검사. 모든 줄은
   **"지우면 실수가 늘어나나?"** 를 통과해야 한다.
 - 등급: `[D]`
 

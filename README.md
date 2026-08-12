@@ -1,7 +1,14 @@
-# harness2
+# jigkit
 
-단계(phase)별로 컨텍스트·권한·산출물 경로를 갈아끼우는 하네스.
+**AI 코딩 에이전트용 프로필 하네스.** 작업 단계마다 로드되는 스킬·MCP·도구·권한을
+갈아끼워, 스킬 라이브러리가 커져도 한 세션이 지는 컨텍스트는 커지지 않게 한다.
+
+목공의 **지그(jig)** 에서 이름을 따왔다. 지그는 공구가 정해진 경로 밖으로 못 나가게
+가두는 치구다 — 작업자의 숙련도와 무관하게 같은 결과가 나오게 하려고 존재한다.
+이 저장소가 하는 일이 그것이다. 규칙을 프롬프트로 부탁하지 않고 권한으로 가둔다.
+
 Claude Code 기준으로 만들었고, 프로필 내용은 도구 중립이라 Codex·agy 로 확장 가능하다.
+라이선스는 MIT.
 
 원칙과 그 출처는 [`PRINCIPLES.md`](PRINCIPLES.md) 에 있다. 실측 근거는
 [`probe/results/phase0.md`](probe/results/phase0.md).
@@ -9,16 +16,16 @@ Claude Code 기준으로 만들었고, 프로필 내용은 도구 중립이라 C
 ## 쓰는 법
 
 ```bash
-hns list                    # 프로필 목록 (스킬·에이전트·MCP 개수 포함)
-hns developer               # 현재 디렉터리를 프로젝트로 삼아 구현 단계 세션 시작
-hns developer ~/work/proj   # 프로젝트 경로 지정
-hns build [프로필]          # library/ + profile.yaml -> build/claude/<n>/
-hns doctor [프로필]         # 규칙 검사 (Write deny 오용 등)
-hns budget [프로필]         # 기동 토큰 실측 + 상한 대조 (모델 호출)
-hns growth 0 10 25 50       # 스킬 개수 대비 비용 곡선 실측
-hns golden [--update]       # 컴파일러 회귀 검사
-hns argv developer          # 기동 인자만 출력 (실행하지 않음)
-hns new <이름>              # 새 프로필
+jig list                    # 프로필 목록 (스킬·에이전트·MCP 개수 포함)
+jig developer               # 현재 디렉터리를 프로젝트로 삼아 구현 단계 세션 시작
+jig developer ~/work/proj   # 프로젝트 경로 지정
+jig build [프로필]          # library/ + profile.yaml -> build/claude/<n>/
+jig doctor [프로필]         # 규칙 검사 (Write deny 오용 등)
+jig budget [프로필]         # 기동 토큰 실측 + 상한 대조 (모델 호출)
+jig growth 0 10 25 50       # 스킬 개수 대비 비용 곡선 실측
+jig golden [--update]       # 컴파일러 회귀 검사
+jig argv developer          # 기동 인자만 출력 (실행하지 않음)
+jig new <이름>              # 새 프로필
 ```
 
 ## 왜 미리 나누나
@@ -42,7 +49,7 @@ hns new <이름>              # 새 프로필
 PATH 에 넣으려면:
 
 ```bash
-echo 'export PATH="$HOME/Desktop/harness2/bin:$PATH"' >> ~/.zshrc
+echo 'export PATH="$HOME/Desktop/jigkit/bin:$PATH"' >> ~/.zshrc
 ```
 
 ## 단계와 핸드오프
@@ -58,7 +65,7 @@ echo 'export PATH="$HOME/Desktop/harness2/bin:$PATH"' >> ~/.zshrc
 | `developer` | design, prd (+review) | `src/**`, `tests/**`, `docs/decisions/{slug}.md` |
 | `reviewer` | prd, design (+decisions) | `docs/review/{slug}.md` |
 
-`hns doctor` 가 이 사슬이 끊겼는지 검사한다 — 아무도 안 만드는 문서를 기다리거나
+`jig doctor` 가 이 사슬이 끊겼는지 검사한다 — 아무도 안 만드는 문서를 기다리거나
 아무도 안 읽는 문서를 만들면 알려준다.
 
 ### 쓰기 권한은 손으로 적지 않는다
@@ -86,7 +93,7 @@ deny_write = (모든 프로필의 outputs) − (내 outputs)
 > /profile designer
   ✓ developer 완료 조건: 3/4
   ⚠ 테스트 미실행
-  다음: 이 세션을 닫고  hns designer
+  다음: 이 세션을 닫고  jig designer
 ```
 
 ## 구조
@@ -102,7 +109,7 @@ profiles/<이름>/       ★ 도구 중립 단일 진실 원천
   profile.yaml         입출력·권한·스킬 id·MCP id·예산·완료 정의
   ROLE.md              단계 지시
 adapters/claude/       Claude Code 문법을 아는 유일한 곳 (build.py, cli.py)
-bin/hns                dispatch 만 한다
+bin/jig                dispatch 만 한다
 build/claude/<n>/      컴파일 산출물 = 실제 --plugin-dir 대상 (gitignore)
 tests/golden/          컴파일러 회귀 기준
 probe/results/         실측 결과
@@ -113,10 +120,10 @@ probe/results/         실측 결과
 **코드 변경 0.** 파일 2개만 고친다.
 
 ```bash
-hns new researcher
+jig new researcher
 # 1) profiles/researcher/profile.yaml  — inputs/outputs/deny/done_when
 # 2) profiles/researcher/ROLE.md       — 순서·경계·자유도
-hns doctor researcher
+jig doctor researcher
 ```
 
 프로필을 늘리기 전에 자문할 것 — **지금 늘어난 것이 단계인가, 직함인가?**

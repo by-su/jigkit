@@ -43,7 +43,7 @@ def discover() -> list[str]:
 def load_profile(name: str) -> dict:
     f = HARNESS / "profiles" / name / "profile.yaml"
     if not f.is_file():
-        raise BuildError(f"프로필 '{name}' 이 없다. `hns list` 로 확인.")
+        raise BuildError(f"프로필 '{name}' 이 없다. `jig list` 로 확인.")
     data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
     if data.get("name") != name:
         raise BuildError(f"{f}: name 이 '{data.get('name')}' 인데 디렉터리는 '{name}' 이다.")
@@ -197,7 +197,7 @@ def compile_profile(name: str, project: Path) -> dict:
         json.dumps({
             "name": name,
             "version": "0.1.0",
-            "description": f"harness2 단계 프로필 — {profile.get('title', name)}",
+            "description": f"jigkit 단계 프로필 — {profile.get('title', name)}",
             "author": {"name": "arto"},
         }, indent=2, ensure_ascii=False) + "\n",
     )

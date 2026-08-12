@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hns 명령 구현. bin/hns 는 여기로 넘기기만 한다."""
+"""jig 명령 구현. bin/jig 는 여기로 넘기기만 한다."""
 from __future__ import annotations
 
 import json
@@ -14,7 +14,7 @@ from build import BUILD, BuildError, HARNESS, compile_profile, discover, launch_
 
 
 def die(msg: str) -> None:
-    print(f"hns: {msg}", file=sys.stderr)
+    print(f"jig: {msg}", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -75,7 +75,7 @@ def cmd_run(name: str, project: Path, extra: list[str]) -> None:
 
 def cmd_list() -> None:
     if not (names := discover()):
-        print("프로필이 없다. `hns new <이름>` 으로 만든다.")
+        print("프로필이 없다. `jig new <이름>` 으로 만든다.")
         return
     for n in names:
         p = load_profile(n)
@@ -224,7 +224,7 @@ def cmd_golden(names: list[str], project: Path, update: bool) -> None:
             print(f"updated golden/{n}")
             continue
         if not exp.is_dir():
-            print(f"FAIL {n}: golden 이 없다. `hns golden --update {n}`")
+            print(f"FAIL {n}: golden 이 없다. `jig golden --update {n}`")
             failed = True
             continue
         cmp = filecmp.dircmp(out, exp)
@@ -247,7 +247,7 @@ def _walk_diff(cmp) -> list[str]:
 def main() -> None:
     args = sys.argv[1:]
     if not args:
-        die("사용법: hns <프로필> [프로젝트] | list | build | doctor | budget | golden | argv")
+        die("사용법: jig <프로필> [프로젝트] | list | build | doctor | budget | golden | argv")
     cmd, rest = args[0], args[1:]
     project = Path(os.environ.get("HNS_PROJECT") or os.getcwd()).resolve()
 
@@ -268,7 +268,7 @@ def main() -> None:
             cmd_golden([r for r in rest if not r.startswith("-")], project, update)
         elif cmd == "argv":
             if not rest:
-                die("hns argv <프로필>")
+                die("jig argv <프로필>")
             print(" ".join(shlex.quote(a) for a in launch_argv(rest[0], project)))
         else:
             if rest and Path(rest[0]).is_dir():
