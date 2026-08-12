@@ -22,33 +22,68 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
 BYPASS = "JIG_TOUCHED_BYPASS"
 
-# `git commit` 을 문자열 포함으로 찾으면 조용히 뚫린다 —
-# `git -c user.name=x commit`, `git<탭>commit`, `git --no-pager commit` 가 전부 빠진다.
-#
-# **비대칭이 설계를 정한다.** 오탐은 문서 목록을 한 번 더 보는 비용이지만,
-# 누락은 게이트가 아예 없는 것과 같다. 그래서 넉넉하게 잡는 쪽으로 편향시킨다
-# (`echo git commit` 에 반응해도 괜찮다). 다만 `commit-tree` 같은 plumbing 은 뺀다.
-_GIT_COMMIT = re.compile(
-    r"(?:^|[;&|(]|\s)"                  # 명령이 시작될 수 있는 자리
-    r"git"                              # git
-    r"(?:\s+(?:-[cC]\s*\S+|--\S+))*"    # 전역 옵션: -c k=v · -C path · --no-pager
-    r"\s+commit(?![\w-])"               # commit 서브커맨드 (commit-tree 제외)
-)
+# **비대칭이 이 파일의 설계를 정한다.** 오탐은 문서 목록을 한 번 더 보는 비용이지만,
+# 누락은 게이트가 아예 없는 것과 같고 아무도 눈치채지 못한다. 그래서 트리거는 넉넉히,
+# 우회는 빡빡하게 잡는다 — 둘 다 "게이트가 조용히 꺼지는" 쪽을 피하는 방향이다.
+
+# 값을 **다음 토큰으로** 받는 git 전역 옵션. `git --git-dir .git commit` 처럼
+# 옵션 인자가 분리되면 정규식만으로는 서브커맨드를 잘못 짚는다.
+_GLOBAL_WITH_VALUE = {"-c", "-C", "--git-dir", "--work-tree", "--namespace",
+                      "--exec-path", "--config-env"}
+
+# shlex 가 실패할 때(따옴표 불균형 등)만 쓰는 대비책. 놓치느니 넓게 잡는다.
+_GIT_COMMIT_RE = re.compile(
+    r"(?:^|[;&|(]|\s)git(?:\s+(?:-[cC]\s*\S+|--\S+))*\s+commit(?![\w-])")
+
+# 우회는 **env 대입 형태로, 명령 시작 위치에서만** 인정한다.
+# `echo JIG_TOUCHED_BYPASS; git commit` 이나 커밋 메시지 안의 언급으로는 꺼지지 않는다.
+_BYPASS_RE = re.compile(r"(?:^|[;&|(])\s*" + BYPASS + r"=[^\s;&|]+")
+
+
+def _shell_segments(command: str) -> list[str]:
+    return re.split(r"[;&|()\n]+", command)
 
 
 def is_git_commit(command: str) -> bool:
-    return bool(_GIT_COMMIT.search(command))
+    """`git` 실행 + `commit` 서브커맨드인가.
+
+    토큰화해서 본다. 전역 옵션이 값을 분리해 받거나(`--git-dir .git`) 따옴표에
+    공백이 들어가면(`-C "/path with space"`) 정규식은 서브커맨드를 놓친다.
+    """
+    try:
+        for seg in _shell_segments(command):
+            toks = shlex.split(seg)
+            for i, t in enumerate(toks):
+                if t != "git" and not t.endswith("/git"):
+                    continue
+                j = i + 1
+                while j < len(toks) and toks[j].startswith("-"):
+                    j += 2 if (toks[j] in _GLOBAL_WITH_VALUE and "=" not in toks[j]) else 1
+                if j < len(toks) and toks[j] == "commit":
+                    return True
+        return False
+    except ValueError:
+        return bool(_GIT_COMMIT_RE.search(command))
 
 
 def is_bypassed(command: str) -> bool:
-    # 우회를 환경변수로 둔 이유 — 트랜스크립트에 흔적이 남는다.
-    return BYPASS in command
+    """우회를 환경변수로 둔 이유 — 트랜스크립트에 흔적이 남는다.
+
+    포함 검사로 두면 `git commit -m "JIG_TOUCHED_BYPASS 설명"` 만으로도 게이트가
+    꺼진다. 대입 형태이고, `git commit` 보다 앞에 와야 인정한다.
+    """
+    m = _BYPASS_RE.search(command)
+    if not m:
+        return False
+    g = _GIT_COMMIT_RE.search(command)
+    return g is None or m.start() < g.start()
 
 
 def repo_root(cwd: str) -> Path | None:

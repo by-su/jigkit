@@ -80,6 +80,21 @@ TARGETS = {
 }
 
 
+def names() -> list[str]:
+    """디스패치 가능한 명령 이름. 사용법 문자열도 여기서 만든다 —
+    손으로 유지하면 또 어긋난다(`selftest` 가 실제로 그렇게 빠져 있었다)."""
+    seen: list[str] = []
+    for _, inv, _, _, _ in COMMANDS:
+        head = inv.split()[0]
+        if not head.startswith("<") and head not in seen:
+            seen.append(head)
+    return seen
+
+
+def usage_line() -> str:
+    return "사용법: jig <프로필> [프로젝트] | " + " | ".join(names())
+
+
 def _w(s: str) -> int:
     """터미널 표시 폭. 한글은 두 칸을 차지하므로 len() 으로는 정렬이 안 맞는다."""
     return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in s)

@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "adapters"))
 
+import commands  # noqa: E402
 import touched  # noqa: E402
 
 
@@ -53,6 +54,11 @@ for cmd in [
     "cd foo && git commit -m x",               # 체이닝
     "git add -A; git commit -m x",             # 세미콜론
     "(git commit)",                            # 서브셸
+    "git --git-dir .git commit",               # 값이 분리된 전역 옵션
+    "git --work-tree /tmp/x commit -m y",
+    'git -C "/path with space" commit',        # 따옴표 안의 공백
+    "/usr/bin/git commit -m x",                # 절대경로 호출
+    "JIG_TOUCHED_BYPASS_TYPO=1 git commit",    # 오타난 우회는 우회가 아니다
 ]:
     check(f"트리거: {cmd!r}", gate.is_git_commit(cmd), True)
 
@@ -66,8 +72,20 @@ for cmd in [
 ]:
     check(f"비트리거: {cmd!r}", gate.is_git_commit(cmd), False)
 
-check("우회 인식", gate.is_bypassed("JIG_TOUCHED_BYPASS=1 git commit -m x"), True)
-check("우회 아님", gate.is_bypassed("git commit -m x"), False)
+# 우회는 빡빡하게. 느슨하면 게이트가 의도치 않게 꺼지고, 꺼진 것은 티가 안 난다.
+for cmd in [
+    "JIG_TOUCHED_BYPASS=1 git commit -m x",
+    "cd foo && JIG_TOUCHED_BYPASS=1 git commit -m x",
+]:
+    check(f"우회 인식: {cmd!r}", gate.is_bypassed(cmd), True)
+
+for cmd in [
+    "git commit -m x",
+    "echo JIG_TOUCHED_BYPASS; git commit -m x",      # 대입이 아니다
+    'git commit -m "JIG_TOUCHED_BYPASS=1 을 다룬다"',  # 커밋 메시지 안의 언급
+    "git commit -m x && JIG_TOUCHED_BYPASS=1 echo hi",  # commit 뒤에 온다
+]:
+    check(f"우회 아님: {cmd!r}", gate.is_bypassed(cmd), False)
 
 # ---------------------------------------------------------------- 토큰 추출
 
@@ -147,6 +165,19 @@ check("소음 토큰이 안 섞인다",
 # 소음 상한이 지켜지는가 — 첫 구현은 110곳을 뱉었고 그건 아무도 안 읽는 양이었다.
 groups = [l for l in text.splitlines() if l.startswith("  ") and not l.startswith("    ")]
 check("토큰 그룹이 상한 이하", len(groups) <= touched.MAX_GROUPS + 4, True)
+
+# ---------------------------------------------------------------- 사용법·메시지
+
+# 손으로 유지하던 사용법 문자열에서 `selftest` 가 실제로 빠져 있었다. 이제 표에서
+# 생성하므로, 명령을 추가하면 자동으로 따라온다 — 그게 유지되는지 본다.
+usage = commands.usage_line()
+for name in commands.names():
+    check(f"사용법에 {name} 이 있다", name in usage, True)
+
+# 감시 경로를 넓혔는데 "코드 변경 없음" 문구가 옛 목록을 말하던 적이 있다.
+no_diff, _ = touched.report("HEAD..HEAD")
+for p in touched.CODE_PATHS:
+    check(f"변경 없음 메시지가 {p} 를 반영한다", p in no_diff, True)
 
 # ---------------------------------------------------------------- 결과
 

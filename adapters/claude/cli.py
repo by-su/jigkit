@@ -589,8 +589,7 @@ def _walk_diff(cmp) -> list[str]:
 def main() -> None:
     args = sys.argv[1:]
     if not args:
-        die("사용법: jig <프로필> [프로젝트] | list | source | sync | skills | usage | "
-            "build | doctor | budget | golden | argv")
+        die(commands.usage_line())
     cmd, rest = args[0], args[1:]
     project = Path(os.environ.get("HNS_PROJECT") or os.getcwd()).resolve()
 

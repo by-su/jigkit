@@ -186,7 +186,8 @@ def report(rev_range: str | None = None) -> tuple[str, bool]:
     """(출력 문자열, primary 히트가 있는가)."""
     diff = code_diff(rev_range)
     if not diff.strip():
-        return ("코드 변경이 없다 (adapters/ · bin/ · bootstrap.sh).", False)
+        watched = " · ".join(CODE_PATHS)
+        return (f"코드 변경이 없다 ({watched}).", False)
 
     tokens = extract_tokens(diff)
     primary_files, historical_files = doc_files()
