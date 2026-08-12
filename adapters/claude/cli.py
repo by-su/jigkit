@@ -14,6 +14,7 @@ from pathlib import Path
 # sources 는 도구 중립이라 adapters/ 바로 아래 산다. build.py 도 같은 처리를 한다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import commands  # noqa: E402
 import sources  # noqa: E402
 import touched  # noqa: E402
 from build import BUILD, BuildError, HARNESS, compile_profile, discover, launch_argv, load_profile, write_readback  # noqa: E402
@@ -261,6 +262,31 @@ def cmd_skills(rest: list[str]) -> None:
             extras = ",".join(s["extras"])[:20]
             print(f"  {i:<36} ~{s['tokens']:>4}t  {extras:<20}  {s['description'][:60]}")
     print(f"\n합계 {len(ids)} 스킬 · 설명 ~{total:,}토큰 (전부 켤 경우 매 세션 비용)")
+
+
+def cmd_docs(rest: list[str]) -> None:
+    """생성된 명령 블록을 갱신하거나(`--update`) 최신인지 검사한다(`--check`).
+
+    이건 라우팅과 달리 **결정 가능**하다 — 재생성 결과가 파일과 같은지 뿐이므로
+    실패시켜도 된다.
+    """
+    write = "--update" in rest
+    try:
+        stale = commands.apply(write=write)
+    except LookupError as e:
+        # 마커가 지워졌거나 옮겨졌다. 트레이스백 대신 무엇을 되살려야 하는지 말한다.
+        die(str(e))
+    if write:
+        for t in stale:
+            print(f"updated {t}")
+        if not stale:
+            print("이미 최신이다.")
+        return
+    if stale:
+        for t in stale:
+            print(f"FAIL {t}: 명령 블록이 낡았다. `jig docs --update`")
+        raise SystemExit(1)
+    print("ok   명령 블록이 최신이다 (bin/jig · README.md · README.ko.md)")
 
 
 def cmd_touched(rest: list[str]) -> None:
@@ -571,6 +597,8 @@ def main() -> None:
             cmd_usage(rest)
         elif cmd == "touched":
             cmd_touched(rest)
+        elif cmd == "docs":
+            cmd_docs(rest)
         elif cmd == "build":
             cmd_build(rest, project)
         elif cmd == "doctor":
