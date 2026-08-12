@@ -1,0 +1,1 @@
+{ "permissions": { "deny": ["Write(//Users/arto/Desktop/harness2/probe/sandbox/src/**)", "Edit(//Users/arto/Desktop/harness2/probe/sandbox/src/**)"] } }
