@@ -18,11 +18,17 @@ from __future__ import annotations
 import unicodedata
 from pathlib import Path
 
+try:
+    from . import mdblock
+except ImportError:  # 스크립트로 직접 불릴 때 (adapters 를 패키지로 import 하지 않는 경로)
+    import mdblock  # type: ignore[no-redef]
+
 HARNESS = Path(__file__).resolve().parents[1]
 
 GROUPS = [
     ("core", "", ""),
     ("skills", "skill sources", "스킬 소스"),
+    ("stacks", "stacks — what a project gets set up with", "스택 — 프로젝트에 무엇을 세팅하는가"),
     ("dev", "working on jigkit", "jigkit 자체를 고칠 때"),
 ]
 
@@ -61,6 +67,17 @@ COMMANDS = [
      "what is available, and what it costs", "쓸 수 있는 스킬과 설명 토큰 비용"),
     ("skills", "usage [--project P] [--profile N]", "usage [--project P] [--profile N]",
      "what actually got invoked, across all projects", "무엇이 실제로 불렸는지 (전 프로젝트 합산)"),
+    # stacks
+    ("stacks", "stack list", "stack list",
+     "the catalog — tools by language and role", "카탈로그 — 언어별·기능별 도구"),
+    ("stacks", "stack show <id> [--with a,b]", "stack show <id> [--with a,b]",
+     "what that combination places", "그 조합이 무엇을 배치하는지"),
+    ("stacks", "stack show <id> --plan [dir]", "stack show <id> --plan [디렉터리]",
+     "the commands to run, in order", "실행할 명령 목록 (순서대로)"),
+    ("stacks", "stack apply <id> [project] [--apply]", "stack apply <id> [프로젝트] [--apply]",
+     "place hooks, config and MCP definitions", "훅·설정·MCP 정의를 배치 (기본 dry-run)"),
+    ("stacks", "stack check <id> [project]", "stack check <id> [프로젝트]",
+     "declared against actual", "선언 ↔ 실제 대조"),
     # dev
     ("dev", "touched [range]", "touched [범위]",
      "which docs mention what this change touched", "이 변경이 건드린 개념을 언급하는 문서"),
@@ -153,28 +170,10 @@ def rendered(target: str) -> str:
     return render_md(ko=target.endswith(".ko.md"))
 
 
-def _splice(text: str, start: str, end: str, body: str) -> str:
-    lines = text.splitlines()
-    try:
-        i = lines.index(start)
-        j = lines.index(end)
-    except ValueError:
-        raise LookupError(f"마커를 찾지 못했다:\n  {start}\n  {end}")
-    return "\n".join(lines[: i + 1] + body.splitlines() + lines[j:]) + "\n"
-
-
 def apply(write: bool) -> list[str]:
     """마커 사이를 다시 쓴다. 바뀐(또는 바뀌어야 할) 파일 목록을 돌려준다."""
-    stale = []
-    for target, (start, end) in TARGETS.items():
-        path = HARNESS / target
-        old = path.read_text(encoding="utf-8")
-        new = _splice(old, start, end, rendered(target))
-        if new == old:
-            continue
-        stale.append(target)
-        if write:
-            path.write_text(new, encoding="utf-8")
-            if path.read_text(encoding="utf-8") != new:  # P09
-                raise OSError(f"{path} 를 썼지만 되읽은 내용이 다르다.")
-    return stale
+    return [
+        target
+        for target, markers in TARGETS.items()
+        if mdblock.apply_block(HARNESS / target, markers, rendered(target), write)
+    ]

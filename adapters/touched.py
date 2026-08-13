@@ -30,6 +30,7 @@ CODE_PATHS = ["adapters", "bin", "bootstrap.sh", "profiles", "core", "library"]
 PRIMARY = [
     "README.md", "README.ko.md", "PRINCIPLES.md", "CLAUDE.md",
     "core/PREAMBLE.md", "core/skills/profile/SKILL.md", "library/mcp/README.md",
+    "library/stacks/README.md", "library/skills/stack/SKILL.md",
 ]
 PRIMARY_GLOBS = ["profiles/*/BRIEF.md"]
 

@@ -586,6 +586,186 @@ if _PENDING.is_file() and note.pending_entries(_PENDING.read_text(encoding="utf-
 else:
     check("항목 없음 → 침묵", proc.stdout, "")
 
+# ---------------------------------------------------------------- 스택 배치
+#
+# 여기서 잡는 것은 **조용히 어긋나는 배치**다. 훅 항목이 1개라는 사실은 배치가 망가져도
+# 그대로 참이므로(실측: probe/results/stack-hooks.md), 모양만 보는 검사로는 부족하다.
+
+import json  # noqa: E402
+import tempfile  # noqa: E402
+
+import stacks  # noqa: E402
+
+sys.path.insert(0, str(ROOT / "adapters" / "claude"))
+import stack_apply  # noqa: E402
+
+check("카탈로그 로드: 정의가 어긋나지 않는다", bool(stacks.load()[0]), True)
+
+# `--with a,b <경로>` 에서 값이 경로로 잡히면 `<경로>/a,b` 를 대상으로 삼는다. 실행해 봐야
+# 나오는 버그였다 — 인자 파싱만 여기서 붙잡는다 (cli 는 import 만 하고 main 은 돌지 않는다).
+import cli  # noqa: E402
+
+check("인자: --with 의 값은 위치 인자가 아니다",
+      cli.positionals(["api", "--with", "fastapi,logfire", "/tmp/p"], {"--with"}),
+      ["api", "/tmp/p"])
+check("인자: 값 없는 플래그는 그냥 빠진다",
+      cli.positionals(["api", "/tmp/p", "--apply"], {"--with"}), ["api", "/tmp/p"])
+
+_api = stacks.resolve("fastapi")
+_web = stacks.resolve("nextjs")
+check("alias: fastapi -> api 프리셋", (_api["lang"], _api["label"]), ("python", "api (python)"))
+check("alias: 언어 base 가 포함된다",
+      {"uv", "ruff", "pyright", "pytest"} <= {i["id"] for i in _api["items"]}, True)
+check("프리셋 == 같은 --with 조합",
+      [i["id"] for i in _web["items"]],
+      [i["id"] for i in stacks.resolve("typescript",
+                                       ["next", "prisma", "shadcn", "playwright"])["items"]])
+check("dedupe: next 와 nest 를 함께 골라도 biome 은 하나",
+      [i["id"] for i in stacks.resolve("typescript", ["next", "prisma"])["items"]].count("biome"),
+      1)
+
+# 스캐폴더가 둘이면 어느 쪽이 프로젝트를 만드는지 알 수 없다 — 조용히 하나를 고르면 안 된다.
+try:
+    stacks.resolve("typescript", ["next", "nest"])
+    check("스캐폴더 둘 -> 거부", "통과했다", "StackError")
+except stacks.StackError as e:
+    check("스캐폴더 둘 -> 거부", "스캐폴더가 둘" in str(e), True)
+
+_target = Path("/tmp/jig-selftest-x")
+_steps = stacks.plan(_web, _target)
+_plan = [step for step, _ in _steps]
+check("--plan 순서", _plan[:2], ["create", "install"])
+check("--plan: apply 가 verify 앞에 온다", _plan.index("apply") < _plan.index("verify"), True)
+check("--plan: normalize 는 apply 뒤 (설정 파일을 apply 가 놓는다)",
+      _plan.index("apply") < _plan.index("normalize"), True)
+_cmds = dict(_steps)
+check("--plan: apply 단계가 --apply 를 붙인다", _cmds["apply"].endswith("--apply"), True)
+
+# 각 줄은 그 자체로 완결이어야 한다 — 실행기가 줄마다 새 셸을 쓰면 cd 한 줄은 사라진다.
+check("--plan: 프로젝트 안에서 돌 줄은 스스로 cd 한다",
+      [s for s, c in _steps if s not in ("create", "apply")
+       and not c.startswith(f"cd {_target} &&")], [])
+
+# create 를 건너뛴(기존) 프로젝트에 strip 을 내면 pnpm remove 가 에러를 내며 계획이 죽는다.
+with tempfile.TemporaryDirectory() as _existing:
+    (Path(_existing) / "package.json").write_text("{}", encoding="utf-8")
+    _nest = stacks.plan(stacks.resolve("nest-api"), Path(_existing))
+    check("--plan: 비어 있지 않은 대상에는 create·strip 을 내지 않는다",
+          [s for s, _ in _nest if s in ("create", "strip")], [])
+    try:
+        stacks.plan(_web, Path(_existing) / "package.json")
+        check("--plan: 파일을 대상으로 주면 거부", "통과했다", "StackError")
+    except stacks.StackError as e:
+        check("--plan: 파일을 대상으로 주면 거부", "디렉터리가 아니다" in str(e), True)
+
+with tempfile.TemporaryDirectory() as _tmp:
+    _proj = Path(_tmp)
+    # MCP 정의는 jigkit 안(library/mcp/)에 쓰이는 것이 정상 동작이다. 검사가 저장소를
+    # 더럽히면 안 되므로 여기서만 샌드박스로 돌린다.
+    stacks.MCP_DIR = _proj / "mcp"
+    stacks.MCP_DIR.mkdir()
+    (_proj / "pyproject.toml").write_text(
+        '[project]\nname = "t"\ndependencies = ["fastapi", "sqlmodel", "logfire"]\n'
+        '\n[dependency-groups]\ndev = ["ruff", "pyright", "ty", "pytest", "testcontainers"]\n',
+        encoding="utf-8")
+    (_proj / "package.json").write_text(
+        '{"name":"t","devDependencies":{"@biomejs/biome":"2","vitest":"3","typescript":"5"},'
+        '"dependencies":{"zod":"4"}}\n', encoding="utf-8")
+
+    check("의존성 파싱: 선언 섹션만 본다 (name 은 의존성이 아니다)",
+          "t" in stacks._deps(_proj), False)
+    check("의존성 파싱: PEP 508 extras 를 벗긴다", "fastapi" in stacks._deps(_proj), True)
+
+    stack_apply.apply(_api, _proj, write=True)
+    _fmt = _proj / ".claude" / "hooks" / "jig-format"
+    _settings = json.loads((_proj / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    check("배치: PostToolUse 항목 1개", len(_settings["hooks"]["PostToolUse"]), 1)
+
+    _before = _fmt.read_text(encoding="utf-8")
+    stack_apply.apply(_api, _proj, write=True)
+    check("멱등: 같은 조합을 두 번 적용해도 diff 가 없다",
+          _fmt.read_text(encoding="utf-8"), _before)
+
+    # 스택 추가가 앞 스택의 분기를 지우면 훅이 조용히 사라진다 — 실제로 그랬다.
+    stack_apply.apply(stacks.resolve("typescript"), _proj, write=True)
+    _merged = _fmt.read_text(encoding="utf-8")
+    check("병합: typescript 추가 후에도 python 분기가 남는다", "# ruff" in _merged, True)
+    check("병합: typescript 분기도 들어간다", "# biome" in _merged, True)
+    check("병합: 항목은 여전히 1개",
+          len(json.loads((_proj / ".claude" / "settings.json")
+                         .read_text(encoding="utf-8"))["hooks"]["PostToolUse"]), 1)
+
+    # 마커 밖의 사람 손 편집은 살아남아야 한다.
+    _fmt.write_text(_merged.replace("import json", "import json  # 사람이 쓴 주석"),
+                    encoding="utf-8")
+    stack_apply.apply(_api, _proj, write=True)
+    check("보존: 마커 밖 편집이 남는다",
+          "# 사람이 쓴 주석" in _fmt.read_text(encoding="utf-8"), True)
+
+    check("check: 배치 후에는 빈 목록",
+          [i for i, _ in stacks.check(stacks.resolve("typescript"), _proj)], [])
+
+    _fmt.write_text(_merged.replace("# ruff", "# gone"), encoding="utf-8")
+    check("check: 분기를 지우면 그 항목이 나온다",
+          [i for i, _ in stacks.check(_api, _proj) if i == "ruff"], ["ruff"])
+
+    # 사람이 주석 처리한 분기를 "있다" 고 세면 체크가 조용히 거짓말한다.
+    _fmt.write_text("\n".join(
+        ("    # " + l.strip()) if "# ruff" in l else l
+        for l in _merged.splitlines()), encoding="utf-8")
+    check("check: 주석 처리된 분기는 없는 것으로 본다",
+          [i for i, _ in stacks.check(_api, _proj) if i == "ruff"], ["ruff"])
+    _fmt.write_text(_merged, encoding="utf-8")
+
+    # 카탈로그에서 은퇴한 항목의 분기는 남아서 계속 돌면 안 된다.
+    _fmt.write_text(_merged.replace(
+        "# ruff", "# ruff\n    (['.zz'], 'echo zz'),  # zzz-retired"), encoding="utf-8")
+    check("check: 카탈로그에 없는 분기를 남는 것으로 보고한다",
+          [i for i, _ in stacks.check(_api, _proj) if i == "zzz-retired"], ["zzz-retired"])
+    _out = stack_apply.apply(_api, _proj, write=True)
+    check("apply: 은퇴 분기를 지우고 무엇을 지웠는지 말한다",
+          any("zzz-retired" in l and "은퇴" in l for l in _out), True)
+    check("apply: 은퇴 뒤 파일에서 사라진다",
+          "zzz-retired" in _fmt.read_text(encoding="utf-8"), False)
+    check("은퇴가 다른 스택 분기를 데려가지 않는다 — biome 은 남는다",
+          "# biome" in _fmt.read_text(encoding="utf-8"), True)
+
+    # 유지되는 분기는 그 줄을 그대로 두지 않고 카탈로그 정의로 다시 렌더한다 — 그래야
+    # 다른 스택만 apply 한 프로젝트에 옛 명령이 남지 않는다.
+    _fmt.write_text(_fmt.read_text(encoding="utf-8")
+                    .replace("pnpm biome check --write", "옛-명령"), encoding="utf-8")
+    stack_apply.apply(_api, _proj, write=True)
+    check("유지 분기가 카탈로그 정의로 갱신된다",
+          "옛-명령" in _fmt.read_text(encoding="utf-8"), False)
+
+    # 사람이 같은 항목에 넣어 둔 다른 훅을 지우면 안 된다.
+    _spath = _proj / ".claude" / "settings.json"
+    _s = json.loads(_spath.read_text(encoding="utf-8"))
+    _s["hooks"]["PostToolUse"][0]["hooks"].append(
+        {"type": "command", "command": "./my-own-notify.sh"})
+    _spath.write_text(json.dumps(_s), encoding="utf-8")
+    stack_apply.apply(_api, _proj, write=True)
+    _after = json.loads(_spath.read_text(encoding="utf-8"))["hooks"]["PostToolUse"][0]["hooks"]
+    check("배치: 같은 항목의 남의 훅이 살아남는다",
+          any("my-own-notify" in (h.get("command") or "") for h in _after), True)
+    check("배치: 우리 훅도 그대로 하나",
+          sum("jig-format" in (h.get("command") or "") for h in _after), 1)
+
+    (_proj / "package.json").write_text(
+        '{"name":"t","devDependencies":{"@biomejs/biome":"2","prettier":"3"}}\n',
+        encoding="utf-8")
+    check("check: 충돌하는 도구가 남아 있으면 나온다",
+          [i for i, _ in stacks.check(stacks.resolve("typescript"), _proj) if i == "prettier"],
+          ["prettier"])
+
+    # 우리 마커가 없는 파일은 덮지 않는다.
+    _fmt.write_text("#!/bin/sh\n사람이 쓴 훅\n", encoding="utf-8")
+    try:
+        stack_apply.apply(_api, _proj, write=False)
+        check("남의 파일 -> 거부", "통과했다", "StackError")
+    except stacks.StackError as e:
+        check("남의 파일 -> 거부", "생성 마커가 없다" in str(e), True)
+
 # ---------------------------------------------------------------- 결과
 
 if _failures:

@@ -1,0 +1,41 @@
+# 조합에 이름을 붙인다. 언어를 가로지르므로 언어 파일 안에 두지 않는다.
+#
+# aliases 가 여기 있는 이유: "fastapi 로 백엔드 만들어줘" 가 어느 조합인지
+# 스킬이 매번 추론하면 같은 요청이 매번 다르게 세팅된다. 말 → 조합 매핑도 데이터다.
+#
+#   jig stack show fastapi        == jig stack show api
+#   jig stack list                어떤 말이 어디로 가는지 같이 출력한다
+#
+# lang 의 base 는 항상 포함된다 — api 는 uv·Ruff·Pyright·pytest 위에 FastAPI 를 얹는다.
+# 같은 alias 를 두 프리셋이 주장하면 로드가 실패한다 (조용히 하나를 고르지 않는다).
+
+presets:
+  api:
+    lang: python
+    title: Python 백엔드
+    with: [fastapi, sqlmodel, testcontainers, logfire]
+    aliases: [fastapi, python-api, 파이썬-백엔드, 백엔드]
+
+  web-app:
+    lang: typescript
+    title: Next.js 웹앱
+    with: [next, prisma, shadcn, playwright]
+    aliases: [next, nextjs, next.js, 웹앱, 프론트]
+
+  nest-api:
+    lang: typescript
+    title: NestJS 백엔드
+    with: [nest, prisma, testcontainers]
+    aliases: [nest, nestjs]
+
+  mobile:
+    lang: typescript
+    title: Expo 앱
+    with: [expo, maestro]
+    aliases: [expo, react-native, rn, 앱]
+
+  ui-lib:
+    lang: typescript
+    title: 디자인 시스템
+    with: [storybook, shadcn]
+    aliases: [storybook, 디자인시스템]
