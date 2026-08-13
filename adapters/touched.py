@@ -24,7 +24,8 @@ HARNESS = Path(__file__).resolve().parents[1]
 # inputs/outputs 는 README 의 핸드오프 표에 그대로 적혀 있고, core 의 PREAMBLE·
 # /profile 스킬도 문서가 서술한다. 그쪽 변경이 문서와 어긋나도 게이트가 못 봤다.
 # `library/cache/` 는 gitignore 라 여기 들어와도 diff 가 안 생긴다.
-CODE_PATHS = ["adapters", "bin", "bootstrap.sh", "profiles", "core", "library"]
+CODE_PATHS = ["adapters", "bin", "bootstrap.sh", "reset-and-setup.sh",
+              "profiles", "core", "library"]
 
 # 갱신 대상인 문서. 여기 히트가 있는데 문서를 하나도 안 건드렸으면 게이트가 막는다.
 PRIMARY = [
