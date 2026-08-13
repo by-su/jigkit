@@ -713,6 +713,16 @@ with tempfile.TemporaryDirectory() as _tmp:
         stack_apply.apply(_api, _b, write=True)
         check("check: 훅은 걸렸지만 도구가 안 깔리면 잡는다",
               {i for i, _ in stacks.check(_api, _b)} >= {"ruff", "pyright"}, True)
+        # check 를 따로 부르지 않는 사람에게도 apply 가 그 자리에서 말해야 한다.
+        check("undetected: 안 깔린 도구를 배치 직후에 짚는다",
+              set(stacks.undetected(_api, _b)) >= {"ruff", "pyright"}, True)
+        check("undetected: 표면 배치와 무관하다 (배치해도 남는다)",
+              "ruff" in stacks.undetected(_api, _b), True)
+
+    check("undetected: 도구가 다 깔린 프로젝트에서는 빈 목록",
+          stacks.undetected(_api, _proj), [])
+    check("undetected: 없는 프로젝트에는 아무 말도 하지 않는다",
+          stacks.undetected(_api, _proj / "없다"), [])
 
     # 스킬이 이 줄을 그대로 실행한다 — 공백이 든 경로가 감싸여야 한다.
     _spaced = stacks.plan(_api, Path("/tmp/jig selftest/api"))

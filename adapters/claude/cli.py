@@ -370,6 +370,12 @@ def cmd_stack(rest: list[str]) -> None:
                   f"{'' if want_write else '   (dry-run — 쓰지 않는다)'}")
             for line in stack_apply.apply(combo, project, write=want_write):
                 print(f"  {line}" if line else "")
+            # 배선만 하고 도구는 깔지 않는다. 안 깔린 채로 두면 훅이 매 편집마다 실패하는데
+            # 증상이 stderr 뿐이라 조용하다 — 여기서 말하지 않으면 check 를 부르는 사람만 안다.
+            if absent := stacks.undetected(combo, project):
+                spec = pos[0] + (f" --with {with_raw}" if with_raw else "")
+                print(f"\n  아직 없는 도구: {', '.join(absent)}")
+                print(f"  설치까지 포함한 순서는 jig stack show {spec} --plan")
             if not want_write:
                 print("\n실제로 쓰려면 같은 명령에 --apply 를 붙인다.")
 

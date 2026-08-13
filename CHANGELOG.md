@@ -23,7 +23,8 @@
   설치만)으로 붙이는지를 `library/stacks/*.yaml` 한 곳에 두고, 카탈로그 문서와 배치 절차를
   거기서 생성한다 (`library/stacks/README.md`)
 - **`jig stack`**: `list` · `show [--with] [--plan]` · `apply [--apply]` · `check`.
-  `apply` 는 훅 디스패처·설정 파일·MCP 정의를 배치하고 기본은 dry-run 이다
+  `apply` 는 훅 디스패처·설정 파일·MCP 정의를 배치하고 기본은 dry-run 이다. 배선만 하고
+  깔지는 않으므로 아직 없는 도구는 배치 직후에 짚는다
   (`adapters/stacks.py`, `adapters/claude/stack_apply.py`)
 - **프리셋과 alias**: `api`(FastAPI) · `web-app`(Next.js) · `nest-api` · `mobile` · `ui-lib`.
   "fastapi 로 백엔드 만들어줘" 가 추론이 아니라 조회로 풀린다 (`library/stacks/presets.yaml`)
