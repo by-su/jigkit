@@ -63,10 +63,5 @@
 
 ## 남은 `[?]`
 
-| 질문 | 확인 방법 |
-|---|---|
-| `--agent <name>` 이 `--plugin-dir` 로 들어온 에이전트를 이름으로 잡는가 | `claude --plugin-dir <p> --agent <name> -p "역할을 한 줄로"` — 네임스페이스(`<plugin>:<agent>`)도 시도 |
-| `Stop` 훅의 `{"decision":"block"}` 이 실제로 턴 종료를 막는가 | 최소 훅 + `-p` 실행 |
-| `--resume <id> --plugin-dir <B>` 가 재개 세션에 B의 플러그인을 적용하는가 | 세션 ID 고정 후 2회 실행 대조 (성공 시 맥락 유지 전환이 가능해짐) |
-| `claude plugin details` 가 경로를 받는가 (토큰 예산 검사에 필요) | `claude plugin details <build 경로>` |
-| `plugin eval --ablation with-without` 이 경로 타겟에서 동작하는가 | `--help` 상 기본값이 경로일 때 `none` 이므로 명시 지정해 확인 |
+살아있는 목록은 [`probe/PENDING.md`](../PENDING.md) 로 옮겼다 — 세션 시작 훅이
+보여주는 곳은 거기다. 이 문서에는 다시 적지 않는다 (두 벌이면 한 벌이 낡는다).

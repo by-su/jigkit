@@ -261,11 +261,12 @@ def install_hooks(out: Path) -> None:
     그래서 `settings.json` 에 이 머신의 절대경로를 박지 않아도 되고,
     golden 출력이 머신 독립을 유지한다.
 
-    둘을 심는다.
+    셋을 심는다.
     - `log-skill`  스킬 호출 기록 (관찰 — 절대 막지 않는다)
     - `commit-gate` 커밋 직전 문서 영향 주입 (jigkit 저장소 안에서만 동작)
+    - `pending-note` 세션 시작 때 검증 대기 목록 주입 (jigkit 저장소 안에서만 동작)
     """
-    for name in ("jig-log-skill", "jig-commit-gate"):
+    for name in ("jig-log-skill", "jig-commit-gate", "jig-pending-note"):
         src = HARNESS / "bin" / name
         if not src.is_file():
             raise BuildError(f"훅 스크립트가 없다: {src}")
@@ -291,6 +292,15 @@ def install_hooks(out: Path) -> None:
                     "hooks": [{"type": "command",
                                "command": "${CLAUDE_PLUGIN_ROOT}/hooks/commit-gate",
                                "timeout": 10}],
+                },
+            ],
+            # stdout 이 컨텍스트에 주입되는 것을 실측했다 (probe/results/session-start.md).
+            "SessionStart": [
+                {
+                    "matcher": "startup",
+                    "hooks": [{"type": "command",
+                               "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pending-note",
+                               "timeout": 5}],
                 },
             ],
         },

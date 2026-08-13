@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""SessionStart 훅 — 검증 대기 목록(probe/PENDING.md)을 세션 컨텍스트에 주입한다.
+
+왜 메모리나 스킬이 아니라 훅인가: "나중에 확인할 것"을 사람이 기억해서 프롬프팅하는
+구조는 P07 이 advisory 라고 못박은 층이고, 잊히는 것이 기본값이다. SessionStart 의
+stdout 은 에이전트 컨텍스트에 들어가므로 `[M]` (probe/results/session-start.md),
+등록부에 적기만 하면 다음 세션들이 알아서 본다.
+
+이것은 표면화지 실행이 아니다 — probe 는 쿼터와 판단을 쓰므로, 처리 여부는
+목록을 본 에이전트와 사용자가 정한다. PENDING.md 머리의 규칙이 그 판단 기준이다.
+
+파싱하지 않고 파일을 그대로 내보낸다. 형식은 사람 것이고, 훅은 배달만 한다.
+어떤 오류에서도 조용히 exit 0 — 알림 장치가 세션 시작을 막으면 안 된다.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+def repo_root(cwd: str) -> Path | None:
+    """cwd 가 jigkit 체크아웃인지 본다. 남의 프로젝트에서는 조용해야 한다.
+
+    bin/jig-commit-gate 의 것과 같은 로직을 **의도적으로 중복**한다 — 이 파일은
+    빌드된 플러그인 안으로 복사되므로, root 를 알아내기 전에는 adapters/ 를
+    import 할 수 없다. 공유하려면 먼저 찾아야 하는데 찾는 코드가 이것이다.
+    """
+    proc = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+    root = Path(proc.stdout.strip())
+    marks = (root / "adapters" / "touched.py", root / "bin" / "jig",
+             root / "PRINCIPLES.md")
+    return root if all(m.exists() for m in marks) else None
+
+
+def pending_entries(text: str) -> int:
+    """`## ` 헤딩 1개 = 1건. jig doctor 도 같은 셈법을 쓴다."""
+    return sum(1 for line in text.splitlines() if line.startswith("## "))
+
+
+def main() -> int:
+    payload = json.load(sys.stdin)
+    cwd = payload.get("cwd")
+    if not cwd:
+        return 0
+    root = repo_root(cwd)
+    if root is None:
+        return 0
+
+    f = root / "probe" / "PENDING.md"
+    if not f.is_file():
+        return 0
+    text = f.read_text(encoding="utf-8")
+    if pending_entries(text) == 0:
+        return 0  # 빈 등록부는 소음이다
+
+    print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:
+        sys.exit(0)  # 알림 장치가 세션을 막으면 안 된다

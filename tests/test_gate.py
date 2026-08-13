@@ -22,17 +22,17 @@ import launchgate  # noqa: E402
 import touched  # noqa: E402
 
 
-def _load_gate():
-    """`bin/jig-commit-gate` 는 확장자가 없어 로더를 직접 지정해야 한다."""
-    loader = importlib.machinery.SourceFileLoader(
-        "gate", str(ROOT / "bin" / "jig-commit-gate"))
-    spec = importlib.util.spec_from_loader("gate", loader)
+def _load_bin(alias: str, name: str):
+    """`bin/` 스크립트는 확장자가 없어 로더를 직접 지정해야 한다."""
+    loader = importlib.machinery.SourceFileLoader(alias, str(ROOT / "bin" / name))
+    spec = importlib.util.spec_from_loader(alias, loader)
     mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)      # __name__ 이 "gate" 라 main() 은 돌지 않는다
+    loader.exec_module(mod)      # __name__ 이 alias 라 main() 은 돌지 않는다
     return mod
 
 
-gate = _load_gate()
+gate = _load_bin("gate", "jig-commit-gate")
+note = _load_bin("note", "jig-pending-note")
 
 _failures: list[str] = []
 
@@ -235,6 +235,41 @@ check("오타난 우회 키 → 차단",
       "block")
 check("빈 값 우회는 우회가 아니다",
       launchgate.verdict(_UNMET, "reviewer", {launchgate.BYPASS: ""})[0], "block")
+
+# ---------------------------------------------------------------- 검증 대기 주입
+
+# 배달 장치는 조용해야 할 곳에서 조용한 것이 계약의 절반이다 — 남의 프로젝트,
+# 빈 등록부. 나머지 절반은 jigkit 안에서 내용이 실제로 나가는 것.
+
+check("머리글만 있는 등록부는 0건",
+      note.pending_entries("# 검증 대기\n\n규칙 어쩌고\n"), 0)
+check("`## ` 헤딩 수가 곧 항목 수",
+      note.pending_entries("# t\n## a\n본문\n## b\n"), 2)
+check("`###` 는 항목이 아니다", note.pending_entries("### 소제목\n"), 0)
+
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+
+_NOTE_BIN = str(ROOT / "bin" / "jig-pending-note")
+
+with tempfile.TemporaryDirectory() as td:
+    proc = subprocess.run([sys.executable, _NOTE_BIN], capture_output=True,
+                          text=True, input=f'{{"cwd": "{td}"}}')
+    check("jigkit 밖 cwd → 침묵", proc.stdout, "")
+    check("jigkit 밖 cwd → exit 0", proc.returncode, 0)
+
+proc = subprocess.run([sys.executable, _NOTE_BIN], capture_output=True,
+                      text=True, input="깨진 페이로드")
+check("깨진 stdin → exit 0 (세션을 막지 않는다)", proc.returncode, 0)
+
+_PENDING = ROOT / "probe" / "PENDING.md"
+proc = subprocess.run([sys.executable, _NOTE_BIN], capture_output=True,
+                      text=True, input=f'{{"cwd": "{ROOT}"}}')
+if _PENDING.is_file() and note.pending_entries(_PENDING.read_text(encoding="utf-8")):
+    check("jigkit 안 + 항목 있음 → 등록부가 나간다",
+          "검증 대기" in proc.stdout, True)
+else:
+    check("항목 없음 → 침묵", proc.stdout, "")
 
 # ---------------------------------------------------------------- 결과
 

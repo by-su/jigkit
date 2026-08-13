@@ -317,6 +317,26 @@ JIG_TOUCHED_BYPASS=1 git commit -m "..."
 무관한 `.md` 한 줄만 staged 해도 통과한다. 산문이 여전히 참인지 판단하는 것은
 자동화되지 않는다 ([`probe/results/commit-gate.md`](probe/results/commit-gate.md)).
 
+### 검증 대기는 스스로 나타난다
+
+"나중에 확인할 것"에도 같은 실패 모드가 있다 — 결과 문서에 묻힌 `[?]` 는 누군가
+기억해 주기를 기다린다. 그래서 미해결 질문은 등록부 한 곳,
+[`probe/PENDING.md`](probe/PENDING.md) 에 모은다 — 항목마다 **확인 방법을 반드시**
+붙여서. 그리고 `SessionStart` 훅이 이 체크아웃 안에서 시작하는 모든 세션에 그 목록을
+주입한다. 실측: 훅의 stdout 은 `-p` 실행에서도 에이전트 컨텍스트에 들어간다
+([`probe/results/session-start.md`](probe/results/session-start.md)).
+
+항목을 확인하면 결과를 `probe/results/` 에 남기고 항목을 지운다. 등록부는 큐지
+기록이 아니다. `jig doctor` 가 대기 건수를 짚어 준다.
+
+이것은 표면화지 강제가 아니다. probe 는 쿼터와 판단을 쓰므로, 지금이 그때인지는
+목록을 본 세션이 정한다 — 빈 등록부는 아무것도 주입하지 않는다.
+
+훅은 의도적으로 두 곳에 배선돼 있다. 컴파일된 프로필 플러그인이 `jig` 세션을,
+저장소에 커밋된 `.claude/settings.json` 이 이 체크아웃의 plain `claude` 세션을
+맡는다 — 후자에는 이 절이 약속해 온 커밋 게이트조차 지금까지 없었다. 프로필 세션은
+`--setting-sources user` 로 뜨므로 두 배선이 겹쳐 발화하는 일은 없다.
+
 ### 명령 목록은 쓰는 게 아니라 생성한다
 
 검사로 못 고치는 것은 중복 제거로 고친다. 위의 명령 표 — 이 파일과 `README.md`,
@@ -377,9 +397,12 @@ adapters/touched.py    변경이 건드린 개념을 언급하는 문서 찾기 
 bin/jig                dispatch 만
 bin/jig-log-skill      훅: 스킬 호출 기록
 bin/jig-commit-gate    훅: 커밋 직전 문서 영향 표시
+bin/jig-pending-note   훅: 세션 시작 때 검증 대기 목록 주입
+.claude/settings.json  이 체크아웃의 plain claude 세션에 훅을 배선
 build/claude/<name>/   컴파일 산출물. --plugin-dir 가 가리키는 곳 (gitignore)
 profiles/_fixture/     프로필이 아니다 — 안 쓰이는 컴파일러 분기의 커버리지
 tests/golden/          기대 컴파일 출력
+probe/PENDING.md       검증 대기 — 큐. 세션 시작 때 주입된다
 probe/results/         실측 결과와 그것을 만든 명령
 
 ~/.jigkit/skill-usage.jsonl   기록된 스킬 호출 — 저장소 밖에 둔다.

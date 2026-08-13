@@ -21,6 +21,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pending-note",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

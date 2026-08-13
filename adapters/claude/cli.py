@@ -465,7 +465,18 @@ def cmd_doctor(names: list[str], project: Path) -> None:
     # 픽스처는 단계가 아니므로 핸드오프 사슬에서 뺀다.
     failed |= _check_handoff_graph(names or discover())
     _check_source_drift()
+    _note_pending()
     raise SystemExit(1 if failed else 0)
+
+
+def _note_pending() -> None:
+    """검증 대기 목록을 짚는다. 항목 셈법은 bin/jig-pending-note 와 같다 (`## ` = 1건)."""
+    f = HARNESS / "probe" / "PENDING.md"
+    if not f.is_file():
+        return
+    if n := sum(1 for line in f.read_text(encoding="utf-8").splitlines()
+                if line.startswith("## ")):
+        print(f"     note pending 검증 {n}건 — probe/PENDING.md")
 
 
 def _check_source_drift() -> None:

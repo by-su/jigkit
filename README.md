@@ -343,6 +343,29 @@ without looking at the docs at all — staging one unrelated `.md` line satisfie
 Judging whether prose is still true is not automatable
 ([`probe/results/commit-gate.md`](probe/results/commit-gate.md)).
 
+### Deferred verifications surface themselves
+
+The same failure mode exists for "verify this later": a `[?]` buried in a
+results file waits for someone to remember it. So open questions live in one
+registry, [`probe/PENDING.md`](probe/PENDING.md) — each entry with **how to
+settle it**, never without — and a `SessionStart` hook injects the list into
+every session that starts inside this checkout. Measured: hook stdout reaches
+the agent's context even in `-p` runs
+([`probe/results/session-start.md`](probe/results/session-start.md)).
+
+Settle an entry, leave the result in `probe/results/`, delete the entry. The
+registry is a queue, not a log. `jig doctor` notes how many entries are waiting.
+
+This is surfacing, not enforcement. Probes cost quota and judgment, so the
+session that sees the list decides whether now is the time — and an empty
+registry injects nothing.
+
+The hooks are wired twice, deliberately. Compiled profile plugins carry them
+for `jig` sessions; `.claude/settings.json` (checked in) covers plain `claude`
+sessions in this checkout — which until now had no commit gate at all, despite
+what this section promised. Profile sessions launch with
+`--setting-sources user`, so the two wirings never fire together.
+
 ### The command list is generated, not written
 
 What a check cannot fix, deduplication can. The command tables above — in this file, in
@@ -405,9 +428,12 @@ adapters/touched.py    which docs mention what a change touched (tool-neutral)
 bin/jig                dispatch only
 bin/jig-log-skill      hook: records skill invocations
 bin/jig-commit-gate    hook: shows doc impact before a commit
+bin/jig-pending-note   hook: injects the pending-verification list at session start
+.claude/settings.json  wires the hooks for plain claude sessions in this checkout
 build/claude/<name>/   compiled output, what --plugin-dir points at (gitignored)
 profiles/_fixture/     not a profile — keeps unused compiler branches covered
 tests/golden/          expected compiler output
+probe/PENDING.md       deferred verifications — a queue, injected at session start
 probe/results/         measurements, with the commands that produced them
 
 ~/.jigkit/skill-usage.jsonl   recorded skill invocations — outside the repo,
