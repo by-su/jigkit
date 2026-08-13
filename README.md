@@ -281,6 +281,10 @@ them. What must not drift — hook JSON, config files, MCP definitions — is wr
 afterwards, so a skill that took a different route is caught by the outcome rather than
 by a rule.
 
+`apply` wires; it never installs. Wiring a hook to a tool that is not there fails on every
+edit and says so only on stderr, so `apply` names the missing tools itself rather than
+waiting for someone to run `check`.
+
 ## Stages and handoff
 
 Work moves between stages as **files**, not as conversation. A stage cannot edit

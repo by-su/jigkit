@@ -426,6 +426,20 @@ def active_ids(text: str) -> set[str]:
     return found
 
 
+def undetected(combo: dict, project: Path) -> list[str]:
+    """조합 중 **프로젝트에 실제로 깔려 있지 않은** 항목. 표면이 배치됐는지는 보지 않는다.
+
+    `apply` 는 훅·게이트를 배선할 뿐 도구를 깔지 않는다. 도구 없이 배선만 끝나면 증상은
+    매 편집마다 나오는 stderr 뿐이라 아무도 눈치채지 못한다 — `check` 를 따로 부르지
+    않는 사람에게도 그 자리에서 말해야 한다.
+    """
+    if not project.exists():
+        return []
+    deps = _deps(project)
+    return [i["id"] for i in combo["items"]
+            if i.get("detect") and not _detected(i["detect"], project, deps)]
+
+
 def check(combo: dict, project: Path) -> list[tuple[str, str]]:
     """선언 ↔ 실제. 빠진 것과 충돌을 돌려준다. 빈 목록이면 조합대로 배치돼 있다."""
     if not project.exists():
