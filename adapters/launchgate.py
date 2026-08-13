@@ -23,34 +23,58 @@ from typing import Mapping
 BYPASS = "JIG_GATE_BYPASS"
 
 
-def verdict(state: dict | None, profile: str, env: Mapping[str, str]) -> tuple[str, str]:
+def verdict(state: dict | None, profile: str, env: Mapping[str, str],
+            known: set[str] | None = None) -> tuple[str, str]:
     """(`'pass'` | `'bypass'` | `'block'`, 메시지).
 
-    차단은 넷이 전부 성립할 때뿐이다:
+    판정의 주인은 `judged`(런처가 기록을 이월할 때 남긴다)이고, 없으면 `profile`
+    (그 세션에서 /profile 이 갓 쓴 기록)이다. `known` 은 실존 프로필 집합 —
+    런처가 넘긴다. 차단은 넷이 전부 성립할 때뿐이다:
       1. state.json 이 읽혔다
       2. `done` 에 정수 `passed` / `total` 이 있다
       3. `passed < total`
-      4. 기록된 프로필과 **다른** 프로필을 기동한다 — 같은 프로필 재기동은
-         곧 복구 경로("돌아가려면 jig <prev>")라 막으면 되돌아갈 수 없다.
+      4. **전진**을 기동한다 — 기록된 `next` 가 방향을 말해 주면 그리로 갈 때만.
+         판정 주인의 재기동은 복구 경로("돌아가려면 jig <주인>")라 막으면 되돌아갈
+         수 없고, 뒤·옆(이전 단계 재방문)도 전진이 아니므로 막지 않는다.
+         `next` 가 없거나 믿을 수 없으면(자기 자신, 실존하지 않는 프로필) 방향을
+         모른다 — 다른 프로필 전부를 막는 쪽으로 보수한다 (게이트가 조용히 꺼지는
+         것보다 한 번 더 보는 비용이 싸다).
     """
     if not isinstance(state, dict):
         return "pass", ""
-    done, prev = state.get("done"), state.get("profile")
-    if not isinstance(done, dict) or not isinstance(prev, str) or not prev:
+    done = state.get("done")
+    owner = state.get("judged") if isinstance(state.get("judged"), str) else None
+    owner = owner or state.get("profile")
+    if not isinstance(done, dict) or not isinstance(owner, str) or not owner:
         return "pass", ""
     passed, total = done.get("passed"), done.get("total")
-    if not isinstance(passed, int) or not isinstance(total, int):
-        return "pass", ""  # 이상형 스키마 — 기록으로 인정하지 않는다 (fail-open)
-    if passed >= total or prev == profile:
+    if not isinstance(passed, int) or not isinstance(total, int) \
+            or isinstance(passed, bool) or isinstance(total, bool):
+        # bool 은 int 의 하위 타입이지만 기록으로 인정하지 않는다 — `passed: true` 를
+        # 1 로 읽으면 전부 통과한 단계가 "True/4 미완" 으로 차단된다 (판정 반전).
         return "pass", ""
+    if passed >= total or owner == profile:
+        return "pass", ""
+    nxt = state.get("next")
+    trusted = (isinstance(nxt, str) and nxt and nxt != owner
+               and (known is None or nxt in known))
+    if trusted and profile != nxt:
+        return "pass", ""  # 전진이 아니다 — 이전 단계 재방문·옆길은 복구 경로다
 
     if env.get(BYPASS):
-        return "bypass", (f"⚠ {BYPASS} — {prev} 미완(done_when {passed}/{total})을 "
+        return "bypass", (f"⚠ {BYPASS} — {owner} 미완(done_when {passed}/{total})을 "
                           f"우회하고 기동한다")
 
-    lines = [f"✗ {prev} 단계 미완 (done_when {passed}/{total}"
+    lines = [f"✗ {owner} 단계 미완 (done_when {passed}/{total}"
              + (f" — {state['ts']} 기록)" if state.get("ts") else ")")]
-    lines += [f"  ⚠ {u}" for u in (done.get("unmet") or []) if isinstance(u, str)]
-    lines += [f"  돌아가려면:   jig {prev}",
+    # unmet 을 쓰는 쪽은 프롬프트 계층이다 — 리스트 대신 문자열이 와도 글자 단위로
+    # 쪼개지 말고 한 항목으로 살린다. 그 밖의 이상형은 버린다 (passed/total 과 동일).
+    unmet = done.get("unmet")
+    if isinstance(unmet, str):
+        unmet = [unmet]
+    elif not isinstance(unmet, list):
+        unmet = []
+    lines += [f"  ⚠ {u}" for u in unmet if isinstance(u, str)]
+    lines += [f"  돌아가려면:   jig {owner}",
               f"  그래도 진행:  {BYPASS}=1 jig {profile}"]
     return "block", "\n".join(lines)

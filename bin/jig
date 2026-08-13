@@ -20,29 +20,29 @@ case "${1:-}" in
     cat <<'USAGE'
 jig — 프로필 하네스 (jigkit)
 
-  jig <프로필> [프로젝트]         해당 프로필로 Claude 세션을 연다
-  jig list                        프로필 목록 (스킬·에이전트·MCP 개수)
-  jig build [프로필]              build/claude/<name>/ 으로 컴파일
-  jig doctor [프로필]             규칙과 핸드오프 사슬 검사
-  jig budget [프로필]             기동 토큰 실측 + 상한 대조
-  jig growth 0 10 25 50           스킬 N개일 때의 비용 곡선 실측
-  jig golden [--update]           컴파일러 회귀 검사
-  jig argv <프로필>               기동 인자만 출력 (실행하지 않음)
-  jig new <이름>                  템플릿에서 새 프로필 생성
+  jig <프로필> [프로젝트]                 해당 프로필로 Claude 세션을 연다
+  jig list                                프로필 목록 (스킬·에이전트·MCP 개수)
+  jig build [프로필]                      build/claude/<name>/ 으로 컴파일
+  jig doctor [프로필]                     규칙과 핸드오프 사슬 검사
+  jig budget [프로필]                     기동 토큰 실측 + 상한 대조
+  jig growth 0 10 25 50                   스킬 N개일 때의 비용 곡선 실측
+  jig golden [--update]                   컴파일러 회귀 검사
+  jig argv <프로필>                       기동 인자만 출력 (실행하지 않음)
+  jig new <이름>                          템플릿에서 새 프로필 생성
 
 스킬 소스
-  jig source add <url> [--as N]   오픈소스 스킬 저장소 등록 (링크 + SHA 만)
-  jig source list                 등록된 소스와 동기화 상태
-  jig sync [소스]                 등록된 ref 대로 캐시를 맞춘다
-  jig sync --check                최신 SHA 만 확인 (캐시·등록부 불변)
-  jig sync --update [소스]        최신으로 올리고 무엇이 바뀌었는지 보여준다
-  jig skills [패턴]               쓸 수 있는 스킬과 설명 토큰 비용
-  jig usage [--project P]         무엇이 실제로 불렸는지 (전 프로젝트 합산)
+  jig source add <url> [--as N]           오픈소스 스킬 저장소 등록 (링크 + SHA 만)
+  jig source list                         등록된 소스와 동기화 상태
+  jig sync [소스]                         등록된 ref 대로 캐시를 맞춘다
+  jig sync --check                        최신 SHA 만 확인 (캐시·등록부 불변)
+  jig sync --update [소스]                최신으로 올리고 무엇이 바뀌었는지 보여준다
+  jig skills [패턴]                       쓸 수 있는 스킬과 설명 토큰 비용
+  jig usage [--project P] [--profile N]   무엇이 실제로 불렸는지 (전 프로젝트 합산)
 
 jigkit 자체를 고칠 때
-  jig touched [범위]              이 변경이 건드린 개념을 언급하는 문서
-  jig docs --check                생성된 명령 블록이 최신인지
-  jig selftest                    커밋 게이트·문서 라우팅 단위 검사
+  jig touched [범위]                      이 변경이 건드린 개념을 언급하는 문서
+  jig docs --check                        생성된 명령 블록이 최신인지
+  jig selftest                            게이트·문서 라우팅·생성물 검사
 USAGE
     # <<< jig commands <<<
     ;;

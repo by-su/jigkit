@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -100,6 +101,71 @@ for cmd in [
 ]:
     check(f"우회 아님: {cmd!r}", gate.is_bypassed(cmd), False)
 
+# `-a`·pathspec 커밋은 훅 시점의 index 가 비어 있어도 커밋 시점에 작업트리를
+# stage 한다 — index 만 보면 `-am` 한 방에 게이트 전체가 조용히 우회된다(리뷰에서
+# 확인된 구멍). 오인 방향도 지킨다: `-m` 의 메시지 값을 pathspec 으로 읽으면
+# 모든 커밋이 작업트리 모드가 된다.
+for cmd in [
+    "git commit -a -m x",
+    "git commit -am x",                        # 뭉친 짧은 옵션
+    "git commit --all -m x",
+    "git commit -m x file.py",                 # pathspec
+    "git commit -m x -- docs/a.md",            # `--` 뒤는 전부 pathspec
+    "git commit --include foo.py -m x",
+    "git commit --include=foo.py -m x",        # `=` 형태도 같은 옵션이다
+    "git commit --pathspec-from-file=list.txt -m x",
+    "git commit --pathspec-from-file list.txt -m x",
+    "git commit --frobnicate -m x",            # 모르는 옵션 — fail-closed 로 넓힌다
+    # git 은 -u 값을 `=` 붙임꼴로만 받는다 — foo.py 를 값으로 삼키면 index 오판
+    "git commit --untracked-files foo.py -m x",
+]:
+    check(f"작업트리 판정: {cmd!r}", gate.widens_worktree(cmd), True)
+
+for cmd in [
+    "git commit -m x",
+    'git commit -m "a b c"',                   # 메시지 값은 pathspec 이 아니다
+    'git commit -m"fix: x"',                   # 붙은 값 — 메시지 글자는 옵션이 아니다
+    "git commit -mdocs",
+    "git commit --amend -m x",                 # amend 는 index 기준
+    "git commit --amend --no-edit",
+    "git commit -s -v -m x",
+    "git commit -S -m x",                      # -S[keyid] 는 값이 붙는 옵션
+    "git commit -F msg.txt",                   # 값 옵션의 값도 pathspec 이 아니다
+    "git commit --message=x",
+]:
+    check(f"index 판정: {cmd!r}", gate.widens_worktree(cmd), False)
+
+# pathspec 은 판정 범위를 좁히는 데 쓴다 — 커밋에 안 실리는 무관한 dirty 파일이
+# 게이트를 잠재우면 안 된다. None 은 전체 작업트리(또는 비확장 커밋).
+check("pathspec 추출",
+      gate.commit_pathspec("git commit -m x foo.py bar.py"), ["foo.py", "bar.py"])
+check("`--` 뒤 pathspec 추출",
+      gate.commit_pathspec("git commit -m x -- docs/a.md"), ["docs/a.md"])
+check("`-a` 는 전체 작업트리", gate.commit_pathspec("git commit -am x"), None)
+check("비확장 커밋은 범위 없음", gate.commit_pathspec("git commit -m x"), None)
+
+# 우회된 호출의 형태는 다른 호출의 판정에 전염되지 않는다 — 우회한 `-am` 이
+# 뒤따르는 index 커밋을 작업트리 기준으로 읽게 만들면 오발·누락 양쪽이 열린다.
+check("우회된 -am 은 뒤 커밋의 판정 범위를 넓히지 않는다",
+      gate.widens_worktree(
+          "JIG_TOUCHED_BYPASS=1 git commit -am wip && git commit -m fix"), False)
+check("우회 없는 -am 은 체이닝 속에서도 넓힌다",
+      gate.widens_worktree("git add -A; git commit -am x"), True)
+
+# pathspec 은 명령이 도는 cwd 기준이다 — touched 는 루트에서 diff 를 돌리므로
+# 루트 기준으로 바꿔야 한다. 하위 디렉터리 커밋에서 그대로 쓰면 아무것도 안 맞아
+# 게이트가 조용히 꺼진다. 확신이 없으면 전체 작업트리 (fail-closed).
+check("하위 디렉터리 pathspec 을 루트 기준으로 해석한다",
+      gate._resolve_pathspec(["cli.py"], "/repo/adapters/claude", "/repo"),
+      ["adapters/claude/cli.py"])
+check("루트에서는 그대로",
+      gate._resolve_pathspec(["adapters/touched.py"], "/repo", "/repo"),
+      ["adapters/touched.py"])
+check("루트 밖으로 나가면 전체로 넓힌다",
+      gate._resolve_pathspec(["../x.py"], "/repo", "/repo"), None)
+check("매직 pathspec 은 해석하지 않고 전체로 넓힌다",
+      gate._resolve_pathspec([":(glob)**/*.py"], "/repo", "/repo"), None)
+
 # ---------------------------------------------------------------- 토큰 추출
 
 DIFF_REMOVED = """\
@@ -161,6 +227,158 @@ check("프로필 산출물 경로가 토큰이 된다",
 check("너무 흔한 토큰은 걸러진다",
       touched.scan({"the": {"x"}}, touched.doc_files()[0]), {})
 
+# ---------------------------------------------------------------- 새 CLI 표면
+
+# 기존 조건은 "기존 문서가 언급하는 개념" 만 봐서 **처음 생기는** 명령·플래그가
+# 조용히 통과했다. 존재 판정을 양방향으로 고정한다 — 안 잡히면 게이트가 없는 것과
+# 같고(false negative), 오발하면 우회가 습관이 되어 게이트가 죽는다(false positive).
+
+DIFF_SURFACE = """\
+--- a/adapters/claude/cli.py
++++ b/adapters/claude/cli.py
++        elif cmd == "serve":
++    x = _flag_value(rest, "--frobnicate")
+"""
+DOCS_EMPTY = ["# README\n아무 표면도 서술하지 않는 문서"]
+got = touched.undocumented_surface(DIFF_SURFACE, DOCS_EMPTY)
+check("미문서화 명령이 잡힌다", ("serve", "명령 jig serve") in got, True)
+check("미문서화 플래그가 잡힌다", ("--frobnicate", "플래그") in got, True)
+
+check("문서에 있으면 잡히지 않는다 (이동된 코드도 이 경로로 해소)",
+      touched.undocumented_surface(
+          DIFF_SURFACE, ["`jig serve` 는 서빙한다. `--frobnicate` 플래그."]), [])
+
+# 맨 단어 판정 — 문서의 `jig served` 가 `serve` 를 증명하면 안 된다.
+check("부분 문자열은 명령의 증거가 아니다",
+      ("serve", "명령 jig serve") in touched.undocumented_surface(
+          DIFF_SURFACE, ["jig served 를 설명하는 문서. --frobnicate 플래그."]), True)
+
+check("제거된 표면은 잡지 않는다 (- 줄은 신설이 아니다)",
+      touched.undocumented_surface("""\
+--- a/adapters/claude/cli.py
++++ b/adapters/claude/cli.py
+-        elif cmd == "serve":
+-    x = _flag_value(rest, "--frobnicate")
+""", DOCS_EMPTY), [])
+
+check("표면 경로 밖(sources.py 의 git 플래그)은 잡지 않는다",
+      touched.undocumented_surface("""\
+--- a/adapters/sources.py
++++ b/adapters/sources.py
++    args += ["--depth", "1"]
+""", DOCS_EMPTY), [])
+
+# 플래그는 jig 의 소비 이디엄(_flag_value·in rest)이 있는 줄에서만 표면이다 —
+# claude 기동 argv 의 리터럴은 남의 표면이고, 수동 제외 목록은 낡는다.
+check("소비 이디엄이 없는 줄의 플래그(claude 기동 argv)는 잡지 않는다",
+      touched.undocumented_surface("""\
+--- a/adapters/claude/cli.py
++++ b/adapters/claude/cli.py
++        argv += ["--output-format", "json"]
+""", DOCS_EMPTY), [])
+check("commands.py 의 표는 그 자체가 표면 — 이디엄 없이도 잡힌다",
+      touched.undocumented_surface("""\
+--- a/adapters/commands.py
++++ b/adapters/commands.py
++    ("dev", "frob [--zap]", "frob [--zap]", "x", "y"),
+""", DOCS_EMPTY),
+      [("--zap", "플래그")])
+
+# 접두사 그림자 — 문서의 긴 플래그가 그것을 접두사로 포함하는 짧은 새 플래그를
+# 증명하면 안 된다. 리뷰에서 실행으로 확인된 false negative.
+DIFF_OUT = """\
+--- a/adapters/claude/cli.py
++++ b/adapters/claude/cli.py
++    v = _flag_value(rest, "--out")
+"""
+check("문서의 --output-format 이 --out 을 증명하지 않는다",
+      touched.undocumented_surface(DIFF_OUT, ["--output-format json 을 쓴다"]),
+      [("--out", "플래그")])
+check("정확히 그 플래그가 문서에 있으면 통과",
+      touched.undocumented_surface(DIFF_OUT, ["`--out` 은 출력 경로다"]), [])
+
+# STOP 은 산문 스캔의 소음 필터지 존재 판정의 면제가 아니다 — 이름이 STOP 에 있는
+# 짧은 새 명령(`jig test` 류)이 검사를 통째로 빠져나가면 안 된다.
+DIFF_TEST_CMD = """\
+--- a/adapters/claude/cli.py
++++ b/adapters/claude/cli.py
++        elif cmd == "test":
+"""
+check("STOP 에 있는 이름의 새 명령도 잡힌다",
+      touched.undocumented_surface(DIFF_TEST_CMD, DOCS_EMPTY),
+      [("test", "명령 jig test")])
+check("STOP 이름이라도 문서화돼 있으면 통과",
+      touched.undocumented_surface(DIFF_TEST_CMD, ["jig test 는 검사를 돌린다"]), [])
+
+# 존재 판정에는 산문용 3자 하한이 없다 — `--as` 같은 2자 플래그도 표면이다.
+DIFF_SHORT_FLAG = """\
+--- a/adapters/claude/cli.py
++++ b/adapters/claude/cli.py
++    v = _flag_value(rest, "--rm")
+"""
+check("2자 플래그도 잡힌다",
+      touched.undocumented_surface(DIFF_SHORT_FLAG, DOCS_EMPTY),
+      [("--rm", "플래그")])
+check("2자 플래그도 문서에 있으면 통과",
+      touched.undocumented_surface(DIFF_SHORT_FLAG, ["`--rm` 은 지운다"]), [])
+
+# 자기 기준선 — 표면 파일 전체를 "신설" 로 간주해도 아무것도 안 잡혀야 한다.
+# 소비 이디엄 앵커(_JIG_FLAG_LINE)가 새 claude 기동 인자를 무시하지 못하게 되면
+# 커밋 게이트에서 놀라기 전에 **여기가 먼저** 빨간불이 된다.
+_primary_texts_disk = [f.read_text(encoding="utf-8") for f in touched.doc_files()[0]]
+for _sp in touched.CLI_SURFACE_PATHS:
+    _src = (ROOT / _sp).read_text(encoding="utf-8")
+    _fake = f"+++ b/{_sp}\n" + "".join(f"+{l}\n" for l in _src.splitlines())
+    check(f"자기 기준선: {_sp} 의 표면이 전부 문서화 또는 소비 이디엄 밖",
+          touched.undocumented_surface(_fake, _primary_texts_disk), [])
+
+# 카나리아 — 추출 정규식과 실제 디스패치 스타일의 **연결**이 살아 있는가. cli.py 의
+# 디스패치를 dict 매핑 등으로 바꾸면 _CMDLIT 는 조용히 아무것도 못 찾게 되고, 합성
+# diff 테스트들은 계속 초록불이다. 그 침묵을 여기서 실패로 바꾼다.
+# `new` 는 bash(bin/jig)가 처리하는 문서화된 예외다.
+_cli_src = (ROOT / "adapters" / "claude" / "cli.py").read_text(encoding="utf-8")
+_extracted = set(touched._CMDLIT.findall(_cli_src))
+for name in commands.names():
+    if name == "new":
+        continue
+    check(f"카나리아: cli.py 디스패치에서 {name} 이 _CMDLIT 로 추출된다",
+          name in _extracted, True)
+
+# 플래그 카나리아 — 소비 이디엄 앵커(_JIG_FLAG_LINE)가 실제 코드와 연결돼 있는가.
+# cli.py 가 플래그 파싱 방식을 바꾸면 표의 플래그가 추출에서 빠지고, 그 순간부터
+# 새 플래그 검사가 조용히 죽는다 — 그 침묵을 여기서 실패로 바꾼다.
+_fake_cli = "+++ b/adapters/claude/cli.py\n" + "".join(
+    f"+{l}\n" for l in _cli_src.splitlines())
+_flags_extracted = {t for t in touched._surface_tokens(_fake_cli) if t.startswith("--")}
+for fl in sorted({"--" + m for _, inv, _, _, _ in commands.COMMANDS
+                  for m in re.findall(r"--([a-z][a-z0-9-]*)", inv)}):
+    check(f"플래그 카나리아: {fl} 가 cli.py 소비 이디엄에서 추출된다",
+          fl in _flags_extracted, True)
+
+# 실저장소 기준선 — 표의 모든 명령이 primary 문서에서 `jig <이름>` 으로 잡혀야
+# 이 게이트가 기존 명령에 오발하지 않는다. 표에서 기대값을 파생하므로 명령을
+# 추가하면 검사가 저절로 따라온다.
+for name in commands.names():
+    pat = re.compile(rf"jig {re.escape(name)}(?![\w-])")
+    check(f"기준선: jig {name} 이 primary 문서에 있다",
+          any(pat.search(t) for t in _primary_texts_disk), True)
+
+msg = gate._surface_message([("serve", "명령 jig serve"), ("--frobnicate", "플래그")])
+for needle in ["serve", "--frobnicate", "jig docs --update", "CHANGELOG",
+               f"{gate.BYPASS}=1 git commit"]:
+    check(f"표면 차단 메시지에 {needle!r} 가 있다", needle in msg, True)
+
+# ---------------------------------------------------------------- staged 문서 필터
+
+# 이력은 "문서를 봤다" 의 증거가 아니다 — CHANGELOG 한 줄로 게이트가 조용해지면
+# 알려진 약점("아무 .md 하나면 통과")이 정문이 된다.
+check("CHANGELOG 만으로는 문서로 인정되지 않는다",
+      touched._doc_paths(["CHANGELOG.md", "README.md", "adapters/x.py"]),
+      ["README.md"])
+check("빈 목록은 빈 목록", touched._doc_paths([]), [])
+check("다른 .md 는 경로 무관하게 인정",
+      touched._doc_paths(["probe/results/x.md"]), ["probe/results/x.md"])
+
 # ---------------------------------------------------------------- 실제 사건 회귀
 
 # 이 도구가 존재하는 이유. 전역 전환 커밋(00b089f)에서 `jig usage` 를 문서화한 줄을
@@ -192,6 +410,43 @@ no_diff, _ = touched.report("HEAD..HEAD")
 for p in touched.CODE_PATHS:
     check(f"변경 없음 메시지가 {p} 를 반영한다", p in no_diff, True)
 
+# ---------------------------------------------------------------- 생성물
+
+# `jig docs --check` 상당을 subprocess 없이 직접 돈다. 여기 배선되기 전에는 수동
+# 명령으로만 존재해서, 생성 블록이 낡아도 아무것도 알리지 않았다.
+try:
+    check("생성된 명령 블록이 최신이다 (아니면 `jig docs --update`)",
+          commands.apply(write=False), [])
+except LookupError as e:
+    _failures.append(f"생성 마커를 잃었다 — 복구 없이는 docs --update 가 못 쓴다: {e}")
+
+# ---------------------------------------------------------------- README 구조 패리티
+
+# 영문이 정본, 한글은 번역 — 절 구조 1:1 (CLAUDE.md 의 규칙인데 검사가 없었다).
+# 헤딩 텍스트는 번역이라 비교할 수 없다 — **레벨 수열**만 본다. 코드 펜스 안의
+# `# bash 주석` 은 헤딩이 아니므로 펜스를 걷어내고 센다.
+
+def _heading_levels(text: str) -> list[int]:
+    levels, fenced = [], False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            fenced = not fenced
+            continue
+        if not fenced and (m := re.match(r"^(#{1,6}) ", line)):
+            levels.append(len(m.group(1)))
+    return levels
+
+check("패리티 헬퍼: 펜스 안은 세지 않고 진짜 헤딩은 센다",
+      _heading_levels("# a\n```\n### 펜스 안\n```\n## b\n"), [1, 2])
+
+_en = (ROOT / "README.md").read_text(encoding="utf-8")
+_ko = (ROOT / "README.ko.md").read_text(encoding="utf-8")
+check("README 절 구조 1:1 (영문이 정본 — README.ko.md 를 맞춘다)",
+      _heading_levels(_ko), _heading_levels(_en))
+check("README 코드 펜스 수 1:1 (영문이 정본 — README.ko.md 를 맞춘다)",
+      sum(l.startswith("```") for l in _ko.splitlines()),
+      sum(l.startswith("```") for l in _en.splitlines()))
+
 # ---------------------------------------------------------------- 기동 게이트
 
 # 커밋 게이트와 fail-open 방향이 반대다: 기록 부재는 정상 경로(스킬 미실행·구 스키마)라
@@ -210,6 +465,64 @@ for needle in ["developer", "3/4", "jig developer",
 # 복구 경로 — "돌아가려면 jig developer" 가 막히면 되돌아갈 수 없다.
 check("미충족 기록 + 같은 프로필 재기동 → 통과",
       launchgate.verdict(_UNMET, "developer", {})[0], "pass")
+
+# unmet 을 쓰는 쪽은 프롬프트 계층이라 리스트 대신 문자열이 올 수 있다 — 글자
+# 단위 ⚠ 도배(실행으로 확인)가 아니라 한 항목으로 나가야 한다.
+kind, msg = launchgate.verdict(
+    {"profile": "developer",
+     "done": {"passed": 3, "total": 4, "unmet": "전체 테스트 스위트 미실행"}},
+    "reviewer", {})
+check("문자열 unmet 도 차단", kind, "block")
+check("문자열 unmet 은 한 항목", msg.count("⚠"), 1)
+check("문자열 unmet 내용이 통째로 나간다", "⚠ 전체 테스트 스위트 미실행" in msg, True)
+check("이상형 unmet(비문자열·비리스트)은 버리되 차단은 유지",
+      launchgate.verdict({"profile": "developer",
+                          "done": {"passed": 1, "total": 2, "unmet": 7}},
+                         "reviewer", {})[0], "block")
+
+# 전진만 막는다 — next 기록이 있으면 이전 단계 재방문·옆길은 복구 경로다.
+_UNMET_NEXT = dict(_UNMET, next="reviewer")
+check("next 기록 + 전진(next 로) → 차단",
+      launchgate.verdict(_UNMET_NEXT, "reviewer", {})[0], "block")
+check("next 기록 + 이전 단계 재방문 → 통과",
+      launchgate.verdict(_UNMET_NEXT, "pm", {})[0], "pass")
+check("next 없는 기록은 다른 프로필 전부 차단 (방향 불명 — 보수)",
+      launchgate.verdict(_UNMET, "pm", {})[0], "block")
+
+# next 를 쓰는 것도 프롬프트 계층이다 — 자기 자신이나 실존하지 않는 프로필을
+# 가리키면 "전진 아님" 예외가 모든 프로필을 통과시켜 게이트가 조용히 꺼진다.
+check("next 가 자기 자신이면 방향 불명 — 보수 차단",
+      launchgate.verdict(dict(_UNMET, next="developer"), "reviewer", {})[0], "block")
+check("next 가 실존 프로필이면 known 검사 통과",
+      launchgate.verdict(_UNMET_NEXT, "pm", {},
+                         known={"developer", "pm", "reviewer"})[0], "pass")
+check("next 가 실존하지 않으면 방향 불명 — 보수 차단",
+      launchgate.verdict(dict(_UNMET, next="ghost"), "pm", {},
+                         known={"developer", "pm", "reviewer"})[0], "block")
+
+# 판정 기록은 기동 사이에 이월된다 — judged 가 주인을 보존해야 프로필이 바뀐
+# state 에서도 귀속이 맞는다 (이월 없이는 옆길 기동 한 번에 게이트가 무장해제됐다).
+_CARRIED = {"profile": "pm", "judged": "developer", "next": "reviewer",
+            "done": {"passed": 3, "total": 4, "unmet": ["전체 테스트 스위트 미실행"]}}
+check("이월된 기록: 전진(next) → 차단",
+      launchgate.verdict(_CARRIED, "reviewer", {})[0], "block")
+check("이월된 기록: 판정 주인 재기동 → 통과 (복구)",
+      launchgate.verdict(_CARRIED, "developer", {})[0], "pass")
+check("이월된 기록: 옆길 → 통과",
+      launchgate.verdict(_CARRIED, "designer", {})[0], "pass")
+check("이월된 기록의 차단 메시지가 판정 주인을 가리킨다",
+      "jig developer" in launchgate.verdict(_CARRIED, "reviewer", {})[1], True)
+
+# bool 은 int 의 하위 타입이다 — `passed: true` 를 1 로 읽으면 전부 통과한 단계가
+# "True/4 미완" 으로 차단된다. 기록으로 인정하지 않는 쪽이 fail-open 방향이다.
+check("passed 가 bool 이면 기록으로 인정하지 않는다 → 통과",
+      launchgate.verdict({"profile": "developer",
+                          "done": {"passed": True, "total": 4}}, "reviewer", {})[0],
+      "pass")
+check("total 이 bool 이어도 마찬가지",
+      launchgate.verdict({"profile": "developer",
+                          "done": {"passed": 0, "total": True}}, "reviewer", {})[0],
+      "pass")
 
 check("충족 기록(passed == total) → 통과",
       launchgate.verdict({"profile": "developer",
@@ -246,6 +559,8 @@ check("머리글만 있는 등록부는 0건",
 check("`## ` 헤딩 수가 곧 항목 수",
       note.pending_entries("# t\n## a\n본문\n## b\n"), 2)
 check("`###` 는 항목이 아니다", note.pending_entries("### 소제목\n"), 0)
+check("코드 펜스 안의 `## ` 는 항목이 아니다",
+      note.pending_entries("# t\n```\n## 예시 헤딩\n```\n## 진짜 항목\n"), 1)
 
 import subprocess  # noqa: E402
 import tempfile  # noqa: E402
@@ -278,4 +593,4 @@ if _failures:
     for f in _failures:
         print(f"  {f}\n")
     raise SystemExit(1)
-print("ok   커밋 게이트 · 기동 게이트 · 문서 라우팅 검사 통과")
+print("ok   커밋 게이트 · 기동 게이트 · 문서 라우팅 · 생성물 검사 통과")

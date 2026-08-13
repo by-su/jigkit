@@ -11,6 +11,26 @@
   항목을 **지운다.** 이 파일은 목록이지 기록이 아니다.
 - 이 목록은 알림이지 강제가 아니다. 세션 목적을 밀어내면서까지 처리하지 않는다.
 
+## 플러그인이 배달하는 SessionStart 훅이 실제로 발화하는가
+
+- 왜: 검증 대기 주입의 jig 세션 쪽 절반이 이 배선(build.py 의 hooks.json)에 걸려
+  있다. 실측(session-start.md)은 settings 경로만 쟀다 — 플러그인 경로가 안
+  발화하면 jig 세션에서 목록이 조용히 사라진다 (fail-silent).
+- 확인: `probe/session-start/run.sh` 를 복제해 훅을 settings 대신 `--plugin-dir`
+  플러그인의 hooks/hooks.json 으로 배달하고 `-p` 실행 stdout 대조.
+  결과는 `probe/results/session-start.md` 에 추가.
+- 등록: 2026-08-13
+
+## --setting-sources user 가 프로젝트 settings 훅을 정말 배제하는가
+
+- 왜: "이중 훅 배선이 겹쳐 발화하지 않는다" 는 README 주장의 유일한 근거인데
+  미실측이다. 배제되지 않으면 체크아웃 안의 jig 세션이 pending-note·commit-gate
+  를 이중 발화한다.
+- 확인: 이 체크아웃에서 `jig argv <프로필>` 의 argv 로 `-p` 실행하되
+  `.claude/settings.json` 훅에 마커 stdout 을 넣어 이중 출력 여부 대조.
+  결과는 `probe/results/session-start.md` 에 추가.
+- 등록: 2026-08-13
+
 ## /profile 이 done 필드를 실제로 state.json 에 쓰는가
 
 - 왜: 기동 게이트가 이 기록에 의존한다. 스킬이 안 쓰면 게이트는 영원히 침묵한다

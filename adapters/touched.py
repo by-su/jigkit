@@ -36,6 +36,23 @@ PRIMARY_GLOBS = ["profiles/*/BRIEF.md"]
 # 과거 실측 기록. 매번 최신화할 대상이 아니다 — 보여는 주되 게이트 판단에서는 뺀다.
 HISTORICAL_GLOBS = ["probe/results/*.md"]
 
+# 새 CLI 표면 검사가 보는 파일. `adapters/` 전체가 아니다 — sources.py 의 git 플래그,
+# build.py·cli.py 의 claude 기동 인자처럼 **jig 표면이 아닌 플래그**가 많이 산다.
+# cmd 디스패치와 명령 표가 사는 이 둘이 jig 표면의 전부다. bin/jig 가 bash 로 직접
+# 처리하는 `new`·`help` 는 못 본다 — 알고 감수하는 한계다.
+CLI_SURFACE_PATHS = ["adapters/claude/cli.py", "adapters/commands.py"]
+
+# 표면 검사용 플래그 매처. 산문 스캔의 _FLAG 는 소음 때문에 3자 하한을 두지만,
+# 존재 판정에 하한을 두면 `--as` 같은 짧은 새 플래그가 조용히 빠진다.
+_FLAG_ANY = re.compile(r"--([a-z][a-z0-9-]*)")
+
+# jig 가 플래그를 **소비하는** 이디엄. cli.py 에는 claude 기동 argv 의 `--플래그`
+# 리터럴도 살기 때문에, 소비 지점에 앵커하지 않으면 남의 표면까지 검사하게 된다 —
+# 그걸 수동 제외 목록(SURFACE_STOP)으로 막았었는데, 목록은 새 기동 인자마다 편집
+# 세금이 들고 낡은 항목이 미래의 진짜 jig 플래그를 영구 면제한다. 앵커가 목록을
+# 대체한다. 이디엄이 바뀌면 selftest 의 플래그 카나리아가 잡는다.
+_JIG_FLAG_LINE = re.compile(r"_flag_value\(|in rest\b")
+
 # 히트가 이보다 많은 토큰은 너무 일반적이라 길잡이가 못 된다.
 TOO_COMMON = 12
 
@@ -73,19 +90,37 @@ def _git(*args: str) -> str:
     return proc.stdout if proc.returncode == 0 else ""
 
 
-def code_diff(rev_range: str | None = None) -> str:
-    """staged diff (기본) 또는 지정한 리비전 범위의 diff. 코드 경로만."""
-    base = ["diff", "-U0"]
-    if rev_range:
-        base.append(rev_range)
-    else:
-        base.append("--cached")
-    return _git(*base, "--", *CODE_PATHS)
+def code_diff(rev_range: str | None = None, paths: list[str] | None = None) -> str:
+    """staged diff (기본) 또는 지정한 리비전 범위의 diff. 코드 경로만.
+
+    paths 는 pathspec 커밋의 판정 범위 — git pathspec 은 합집합이라 CODE_PATHS 와
+    한 호출로 교집합할 수 없으므로, 이름을 먼저 좁히고 그 파일들만 diff 한다.
+    """
+    base = ["diff", "-U0", rev_range or "--cached"]
+    if paths is None:
+        return _git(*base, "--", *CODE_PATHS)
+    names = _git("diff", "--name-only", rev_range or "--cached", "--", *paths).splitlines()
+    inside = [n for n in names if any(n == p or n.startswith(p + "/") for p in CODE_PATHS)]
+    return _git(*base, "--", *inside) if inside else ""
 
 
-def staged_docs() -> list[str]:
-    out = _git("diff", "--cached", "--name-only")
-    return [f for f in out.splitlines() if f.endswith(".md")]
+def _doc_paths(names: list[str]) -> list[str]:
+    """staged 목록에서 "문서를 봤다" 로 인정할 파일만.
+
+    CHANGELOG.md 는 뺀다 — 이력은 현재 상태의 서술이 아니다. 이력 한 줄로 게이트가
+    조용해지는 길을 열면, 알려진 약점("아무 .md 하나면 통과")이 정문이 된다.
+    """
+    return [f for f in names if f.endswith(".md") and f != "CHANGELOG.md"]
+
+
+def staged_docs(worktree: bool = False, paths: list[str] | None = None) -> list[str]:
+    """"문서를 봤다" 로 인정할 변경 목록. worktree 는 `commit -a`·pathspec 용 —
+    그 커밋에 실리는 것은 index 가 아니라 추적 중인 작업트리고, pathspec 이 있으면
+    그 밖의 dirty 문서는 커밋에 안 실리므로 증거가 아니다."""
+    base = ["diff", "HEAD", "--name-only"] if worktree else ["diff", "--cached", "--name-only"]
+    if worktree and paths:
+        base += ["--", *paths]
+    return _doc_paths(_git(*base).splitlines())
 
 
 def _segments(identifier: str) -> list[str]:
@@ -182,9 +217,119 @@ def scan(tokens: dict[str, set[str]], files: list[Path]) -> dict[str, list[tuple
     return {t: h for t, h in hits.items() if h and len(h) <= TOO_COMMON}
 
 
-def report(rev_range: str | None = None) -> tuple[str, bool]:
-    """(출력 문자열, primary 히트가 있는가)."""
-    diff = code_diff(rev_range)
+def _surface_tokens(diff: str) -> dict[str, str]:
+    """diff 의 `+` 줄이 만든 CLI 표면 토큰 -> 근거. 문서를 읽기 전의 싼 전반부다."""
+    current = ""
+    found: dict[str, str] = {}
+    for raw in diff.splitlines():
+        if raw.startswith("+++ "):
+            current = raw[4:].strip()
+            current = current[2:] if current.startswith("b/") else current
+            continue
+        if current not in CLI_SURFACE_PATHS:
+            continue
+        if not raw.startswith("+") or raw.startswith("++"):
+            continue
+        line = raw[1:]
+        for m in _CMDLIT.finditer(line):
+            # STOP·길이 필터를 걸지 않는다 — 그건 산문 스캔의 소음 필터고 여기는
+            # 존재 판정이다. `cmd == "test"` 는 이름이 STOP 에 있어도 새 명령이다.
+            found.setdefault(m.group(1), f"명령 jig {m.group(1)}")
+        # 플래그는 소비 이디엄이 있는 줄에서만 — commands.py 의 표는 그 자체가 표면.
+        if current == "adapters/commands.py" or _JIG_FLAG_LINE.search(line):
+            for m in _FLAG_ANY.finditer(line):
+                found.setdefault("--" + m.group(1), "플래그")
+    return found
+
+
+def undocumented_surface(diff: str, doc_texts: list[str]) -> list[tuple[str, str]]:
+    """추가된 CLI 표면 중 어떤 primary 문서에도 없는 것 -> [(토큰, 근거)].
+
+    기존 게이트는 "기존 문서가 언급하는 개념을 바꿨는가" 만 본다. 그래서 **처음
+    생기는** 명령·플래그는 언급하는 문서가 없어 조용히 통과했다 — 여기는 반대
+    방향을 본다: `+` 줄이 만든 표면이 문서 어딘가에 존재하는가.
+
+    길잡이가 아니라 존재 판정이므로 TOO_COMMON 상한은 적용하지 않는다. 이동된
+    코드(지웠다가 다시 붙인 줄)는 이미 문서에 있으므로 존재 판정이 자연히 거른다.
+    """
+    found = _surface_tokens(diff)
+    out: list[tuple[str, str]] = []
+    for tok, why in sorted(found.items()):
+        # 양쪽 다 맨 토큰으로 본다 — 문서의 `jig served` 가 `serve` 를, 문서의
+        # `--output-format` 이 `--out` 을 증명하면 안 된다.
+        if tok.startswith("--"):
+            pat = re.compile(rf"(?<![\w-]){re.escape(tok)}(?![\w-])")
+        else:
+            pat = re.compile(rf"jig {re.escape(tok)}(?![\w-])")
+        if not any(pat.search(text) for text in doc_texts):
+            out.append((tok, why))
+    return out
+
+
+def new_cli_surface(rev_range: str | None = None, worktree: bool = False,
+                    diff: str | None = None,
+                    paths: list[str] | None = None) -> list[tuple[str, str]]:
+    """게이트용 래퍼. 어떤 오류에서도 [] — fail-open, 게이트 본체와 같은 방향.
+
+    문서를 읽는 곳이 모드를 따라간다 — 판정 대상이 "**이 커밋에** 문서가 실리는가"
+    이기 때문이다.
+      staged   : index 만. 디스크 폴백을 두면 stage 안 된 서술이 표면을 "증명"한다.
+      worktree : `commit -a`·pathspec 용. 추적 중인 디스크 파일 — 단, pathspec 밖의
+                 dirty 문서는 그 커밋에 실리지 않으므로 HEAD 내용으로 되돌려 본다.
+                 미추적 문서도 증거가 아니다.
+      rev_range: 자문용(jig touched). 디스크로 충분하다.
+
+    diff 는 호출자가 이미 만들었다면 건넨다 (게이트가 두 번 돌리지 않게).
+    표면 토큰이 아예 없으면 문서를 읽기 전에 끝낸다 — 대부분의 커밋은 표면 파일을
+    건드리지 않는데 그때마다 문서 수만큼 subprocess 를 돌릴 이유가 없다.
+    """
+    try:
+        if diff is None:
+            diff = code_diff("HEAD" if worktree else rev_range, paths=paths)
+        if not diff.strip() or not _surface_tokens(diff):
+            return []
+        texts: list[str] = []
+        if worktree:
+            tracked = set(_git("ls-files").splitlines())
+            dirty = set(_git("diff", "HEAD", "--name-only").splitlines())
+            shipped = (set(_git("diff", "HEAD", "--name-only", "--", *paths).splitlines())
+                       if paths else dirty)
+        for f in doc_files()[0]:
+            rel = str(f.relative_to(HARNESS))
+            if worktree:
+                if rel not in tracked:
+                    continue
+                if rel in dirty and rel not in shipped:
+                    text = _git("show", f"HEAD:{rel}")  # 커밋에 안 실리는 편집 제외
+                else:
+                    try:
+                        text = f.read_text(encoding="utf-8", errors="replace")
+                    except OSError:
+                        continue
+            elif rev_range is None:
+                text = _git("show", f":{rel}")
+            else:
+                try:
+                    text = f.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+            if text:
+                texts.append(text)
+        return undocumented_surface(diff, texts)
+    except Exception:
+        return []
+
+
+def report(rev_range: str | None = None,
+           surface: list[tuple[str, str]] | None = None,
+           diff: str | None = None) -> tuple[str, bool]:
+    """(출력 문자열, primary 히트가 있는가).
+
+    표면 검사와 diff 를 이미 만들었으면 건넨다 — 게이트가 커밋마다 같은 subprocess
+    를 두 번씩 돌리지 않게. None 이면 여기서 계산한다.
+    """
+    if diff is None:
+        diff = code_diff(rev_range)
     if not diff.strip():
         watched = " · ".join(CODE_PATHS)
         return (f"코드 변경이 없다 ({watched}).", False)
@@ -193,11 +338,27 @@ def report(rev_range: str | None = None) -> tuple[str, bool]:
     primary_files, historical_files = doc_files()
     p_hits = scan(tokens, primary_files)
     h_hits = scan(tokens, historical_files)
+    if surface is None:
+        surface = new_cli_surface(rev_range, diff=diff)
 
-    if not p_hits and not h_hits:
+    if not p_hits and not h_hits and not surface:
         return ("바뀐 개념을 언급하는 문서가 없다.", False)
 
-    lines = ["이 변경이 건드린 개념을 언급하는 문서", ""]
+    # 차단 판단은 게이트가 new_cli_surface() 를 직접 호출한다 — 여기는 표시만.
+    # 그래서 반환되는 has_primary 의 의미는 표면 검사와 무관하게 그대로다.
+    if surface:
+        # 과거 범위(rev_range)는 이미 지나간 커밋이다 — 막는다고 말하면 거짓이다.
+        note = "커밋 게이트가 막는다" if rev_range is None else "이 범위에서는 안 막혔다 — 참고"
+        head = [f"새 CLI 표면 — 어떤 primary 문서에도 없다 ({note})", ""]
+        for tok, why in surface:
+            head.append(f"    {tok}    ({why})")
+        head.append("")
+        if not p_hits and not h_hits:
+            return ("\n".join(head), False)
+    else:
+        head = []
+
+    lines = head + ["이 변경이 건드린 개념을 언급하는 문서", ""]
 
     # **히트가 적은 토큰부터.** 정확한 토큰(`.jigkit` 4곳)이 넓은 토큰(`usage` 14곳)보다
     # 길잡이로 낫다. 많은 순으로 두면 소음이 맨 위에 온다.

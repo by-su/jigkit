@@ -59,7 +59,7 @@ COMMANDS = [
      "apply, showing what changed", "최신으로 올리고 무엇이 바뀌었는지 보여준다"),
     ("skills", "skills [pattern]", "skills [패턴]",
      "what is available, and what it costs", "쓸 수 있는 스킬과 설명 토큰 비용"),
-    ("skills", "usage [--project P]", "usage [--project P]",
+    ("skills", "usage [--project P] [--profile N]", "usage [--project P] [--profile N]",
      "what actually got invoked, across all projects", "무엇이 실제로 불렸는지 (전 프로젝트 합산)"),
     # dev
     ("dev", "touched [range]", "touched [범위]",
@@ -67,7 +67,7 @@ COMMANDS = [
     ("dev", "docs --check", "docs --check",
      "are the generated command blocks current?", "생성된 명령 블록이 최신인지"),
     ("dev", "selftest", "selftest",
-     "unit-test the commit gate and doc routing", "커밋 게이트·문서 라우팅 단위 검사"),
+     "unit-test the gates, doc routing and generated docs", "게이트·문서 라우팅·생성물 검사"),
 ]
 
 # 마커는 **렌더링에 보이지 않는 주석**이어야 한다.

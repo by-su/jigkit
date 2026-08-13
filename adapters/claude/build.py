@@ -294,7 +294,10 @@ def install_hooks(out: Path) -> None:
                                "timeout": 10}],
                 },
             ],
-            # stdout 이 컨텍스트에 주입되는 것을 실측했다 (probe/results/session-start.md).
+            # stdout 주입 실측(probe/results/session-start.md)은 **settings 경로**를
+            # 잰 것이다. 플러그인 경로의 SessionStart 발화는 아직 미실측 — 확인
+            # 방법과 함께 probe/PENDING.md 에 등록돼 있다. 안 발화하면 jig 세션의
+            # 검증 대기 주입이 조용히 빠진다 (fail-silent).
             "SessionStart": [
                 {
                     "matcher": "startup",

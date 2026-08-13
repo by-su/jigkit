@@ -27,16 +27,31 @@ def die(msg: str) -> None:
     raise SystemExit(1)
 
 
-def record_state(name: str, project: Path) -> list[str]:
-    """세션 불변 기동: 상태 기록 -> 되읽기 -> 선행 산출물 확인."""
+def record_state(name: str, project: Path, prev: dict | None) -> list[str]:
+    """세션 불변 기동: 상태 기록 -> 되읽기 -> 선행 산출물 확인.
+
+    prev 는 호출자가 **기동 게이트 판정에 쓴 것과 같은** 파싱 결과다. 여기서 파일을
+    다시 읽으면 게이트 입력과 기록 입력이 갈라질 수 있고, "게이트가 덮어쓰기보다
+    먼저" 라는 순서도 주석이 아니라 호출 서명이 지킨다.
+    """
     state = {"profile": name, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    prev = project / ".harness" / "state.json"
-    if prev.is_file():
-        try:
-            state["previous"] = json.loads(prev.read_text(encoding="utf-8")).get("profile")
-        except (json.JSONDecodeError, OSError):
-            pass
-    write_readback(prev, json.dumps(state, indent=2, ensure_ascii=False) + "\n")
+    if isinstance(prev, dict):
+        state["previous"] = prev.get("profile")
+        # 판정 기록(done·next·주인)은 /profile 이 새 판정을 쓸 때까지 **모든 기동**
+        # 에서 한 단위로 이월한다. 기동은 판정을 소비하지 않는다 — 같은 프로필
+        # 재기동(복구)이 지우면 복구 "시작"이 곧 통과가 되고, 옆길 기동이 지우면
+        # 그 다음의 진짜 전진이 무사통과한다 (둘 다 리뷰에서 실측된 구멍).
+        # `judged` 는 판정의 주인 — 이월하면서 profile 이 바뀌어도 귀속이 남는다.
+        if isinstance(prev.get("done"), dict):
+            state["done"] = prev["done"]
+            if isinstance(prev.get("next"), str) and prev.get("next"):
+                state["next"] = prev["next"]
+            judged = prev.get("judged") if isinstance(prev.get("judged"), str) else None
+            judged = judged or prev.get("profile")
+            if isinstance(judged, str) and judged:
+                state["judged"] = judged
+    path = project / ".harness" / "state.json"
+    write_readback(path, json.dumps(state, indent=2, ensure_ascii=False) + "\n")
 
     missing = []
     for pattern in load_profile(name).get("inputs") or []:
@@ -74,21 +89,28 @@ def cmd_run(name: str, project: Path, extra: list[str]) -> None:
     # `_template` 은 name 불일치로 **우연히** 막혀 있었을 뿐이다.
     if name.startswith("_"):
         die(f"'{name}' 은 프로필이 아니다 (템플릿·픽스처). `jig list` 로 확인.")
+    # 이름 검증이 게이트보다 먼저다 — 오타 난 프로필에 차단 메시지가 뜨면
+    # 존재하지도 않는 프로필의 우회(JIG_GATE_BYPASS)를 코칭하게 된다.
+    known = set(discover())
+    if name not in known:
+        die(f"'{name}' 프로필이 없다. `jig list` 로 확인.")
 
     # 기동 게이트: /profile 이 남긴 done_when 미충족 기록이 있으면 전진을 막는다.
     # record_state() 가 state.json 을 덮어쓰므로 반드시 그 전에 읽는다.
     try:
         state = json.loads((project / ".harness" / "state.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        state = None  # 기록 부재·파싱 실패는 통과 — 게이트는 기록된 미충족에만 반응한다
-    kind, msg = launchgate.verdict(state, name, os.environ)
+    except (OSError, ValueError):
+        # 기록 부재·파싱 실패·인코딩 깨짐은 통과 — 게이트는 기록된 미충족에만 반응한다.
+        # ValueError 가 JSONDecodeError 와 UnicodeDecodeError 를 함께 덮는다.
+        state = None
+    kind, msg = launchgate.verdict(state, name, os.environ, known=known)
     if kind == "block":
         die(msg)
     if kind == "bypass":
         print(f"  {msg}", file=sys.stderr)
 
     argv = launch_argv(name, project)
-    missing = record_state(name, project)
+    missing = record_state(name, project, state)
     p = load_profile(name)
 
     print(f"[{name}] {p.get('title', '')} — {p.get('summary', '')}", file=sys.stderr)
@@ -470,12 +492,23 @@ def cmd_doctor(names: list[str], project: Path) -> None:
 
 
 def _note_pending() -> None:
-    """검증 대기 목록을 짚는다. 항목 셈법은 bin/jig-pending-note 와 같다 (`## ` = 1건)."""
+    """검증 대기 목록을 짚는다. 항목 셈법은 bin/jig-pending-note 의 것을 **불러 쓴다** —
+    사본을 두면 갈라진다 (펜스 제외 수정을 두 곳에 따로 적용해야 했던 것이 그 증거)."""
     f = HARNESS / "probe" / "PENDING.md"
     if not f.is_file():
         return
-    if n := sum(1 for line in f.read_text(encoding="utf-8").splitlines()
-                if line.startswith("## ")):
+    try:
+        import importlib.machinery
+        import importlib.util
+        loader = importlib.machinery.SourceFileLoader(
+            "_pending_note", str(HARNESS / "bin" / "jig-pending-note"))
+        spec = importlib.util.spec_from_loader("_pending_note", loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        n = mod.pending_entries(f.read_text(encoding="utf-8"))
+    except Exception:
+        return  # 알림 장치가 진단을 죽이면 안 된다 — 빌려 쓰는 훅과 같은 계약
+    if n:
         print(f"     note pending 검증 {n}건 — probe/PENDING.md")
 
 
