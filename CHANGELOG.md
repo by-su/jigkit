@@ -80,6 +80,9 @@
   `adapters/touched.py`)
 - **selftest 확장**: 생성된 명령 블록의 최신성(`jig docs --check` 상당)과
   README.md ↔ README.ko.md 절 구조 1:1 을 `jig selftest` 가 검사 (`tests/test_gate.py`)
+- **초기화 스크립트**: `reset-and-setup.sh` — Claude Code 를 방금 설치한 상태로
+  되돌린 뒤 `bootstrap.sh` 까지 돌린다. 백업·`--restore` 로 되돌릴 수 있고, 파일
+  하나만 다른 기계로 복사해도 스스로 clone 한다 (`reset-and-setup.sh`)
 
 ### Changed
 
