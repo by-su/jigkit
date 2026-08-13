@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import tomllib
 from pathlib import Path
 
@@ -84,8 +85,13 @@ def _validate_item(item: dict, where: str) -> None:
             raise StackError(f"{where}: hook.event 는 PostToolUse 만 지원한다 — {item['id']}")
         if not hook.get("ext") or not hook.get("run"):
             raise StackError(f"{where}: hook 에 ext·run 이 필요하다 — {item['id']}")
-    if surface == "gate" and not item.get("gate"):
-        raise StackError(f"{where}: surface: gate 인데 gate 정의가 없다 — {item['id']}")
+    if surface == "gate":
+        gate = item.get("gate") or {}
+        if not gate:
+            raise StackError(f"{where}: surface: gate 인데 gate 정의가 없다 — {item['id']}")
+        if not gate.get("run"):
+            # 여기서 안 잡으면 apply 때 KeyError 트레이스백으로 나온다.
+            raise StackError(f"{where}: gate 에 run 이 필요하다 — {item['id']}")
     if surface == "mcp":
         if not item.get("mcp"):
             raise StackError(f"{where}: surface: mcp 인데 mcp 정의가 없다 — {item['id']}")
@@ -213,8 +219,11 @@ def resolve(spec: str, with_keys: list[str] | None = None) -> dict:
         if k not in keys:
             keys.append(k)
 
-    # requires 를 따라 닫는다 (얕게 반복 — 깊은 사슬은 아직 없다).
-    for _ in range(len(keys) + 1):
+    # requires 를 **바뀌지 않을 때까지** 닫는다. 반복 횟수를 처음 키 개수로 묶으면 사슬이
+    # 깊을 때 조용히 덜 닫힌다 — 오류 없이 항목 하나가 빠지는 형태다.
+    grew = True
+    while grew:
+        grew = False
         for k in list(keys):
             block = _find_optional(stacks, lang, k)
             if block is None:
@@ -222,6 +231,7 @@ def resolve(spec: str, with_keys: list[str] | None = None) -> dict:
             for dep in block.get("requires") or []:
                 if dep not in keys:
                     keys.append(dep)
+                    grew = True
 
     stack = stacks[lang]
     items: list[dict] = []
@@ -293,17 +303,21 @@ def plan(combo: dict, target: Path) -> list[tuple[str, str]]:
         raise StackError(f"{target} 는 디렉터리가 아니다")
     empty = not target.exists() or not any(target.iterdir())
     created = bool(combo["create"]) and empty
+    # 스킬은 이 줄을 **그대로** 실행한다. 공백이 든 경로(`~/My Projects/api`)를 안 감싸면
+    # 모든 단계가 엉뚱한 디렉터리에서 돌거나 실패한다.
+    q, qparent, qname = (shlex.quote(str(target)), shlex.quote(str(target.parent)),
+                         shlex.quote(target.name))
 
     def inproj(cmd: str) -> str:
-        return f"cd {target} && {cmd}"
+        return f"cd {q} && {cmd}"
 
     if created:
         # 경로를 못 다루는 스캐폴더가 있다 — nest 는 절대경로를 소문자로 낮추거나 상대경로로
         # 취급한다 [M]. 그런 경우 부모에서 이름만 주고 돌리므로 세 형태를 다 준다.
         steps.append(("create", combo["create"]
-                      .replace("{dir}", str(target))
-                      .replace("{parent}", str(target.parent))
-                      .replace("{name}", target.name)))
+                      .replace("{dir}", q)
+                      .replace("{parent}", qparent)
+                      .replace("{name}", qname)))
 
     # strips 는 **스캐폴더가 방금 깐 것**을 지우는 단계다. create 를 건너뛴 기존 프로젝트에
     # 내면 `pnpm remove` 가 없는 의존성에 에러를 내며 계획이 중간에 죽는다 [M].
@@ -327,7 +341,7 @@ def plan(combo: dict, target: Path) -> list[tuple[str, str]]:
     args = combo["spec"]
     if combo["keys"]:
         args += " --with " + ",".join(combo["keys"])
-    steps.append(("apply", f"jig stack apply {args} {target} --apply"))
+    steps.append(("apply", f"jig stack apply {args} {q} --apply"))
 
     # 스캐폴더·init 이 만든 파일을 우리 규칙으로 정리한다. **apply 뒤에 와야 한다** —
     # 설정 파일(biome.json 등)을 apply 가 배치하므로, 앞에 두면 도구 기본값으로 포맷한 뒤
@@ -428,18 +442,22 @@ def check(combo: dict, project: Path) -> list[tuple[str, str]]:
 
     for item in combo["items"]:
         iid, surface = item["id"], item["surface"]
-        if surface == "hook":
-            if iid not in fmt_ids:
-                missing.append((iid, "포맷 디스패처에 살아 있는 분기가 없다 — jig stack apply"))
-            continue
-        if surface == "gate":
-            if iid not in gate_ids:
-                missing.append((iid, "게이트 디스패처에 살아 있는 분기가 없다 — jig stack apply"))
-            continue
-        if surface == "mcp" and not (MCP_DIR / f"{iid}.json").is_file():
+        flagged = False
+        if surface == "hook" and iid not in fmt_ids:
+            missing.append((iid, "포맷 디스패처에 살아 있는 분기가 없다 — jig stack apply"))
+            flagged = True
+        elif surface == "gate" and iid not in gate_ids:
+            missing.append((iid, "게이트 디스패처에 살아 있는 분기가 없다 — jig stack apply"))
+            flagged = True
+        elif surface == "mcp" and not (MCP_DIR / f"{iid}.json").is_file():
             missing.append((iid, f"library/mcp/{iid}.json 이 없다 — jig stack apply"))
-            continue
-        if item.get("detect") and not _detected(item["detect"], project, deps):
+            flagged = True
+
+        # 표면 검사를 통과했어도 **도구가 깔렸는지는 따로 본다.** 예전에는 hook·gate·mcp 가
+        # 표면 검사 뒤에 그대로 빠져나가서, 훅은 걸렸는데 ruff·pyright 가 안 깔린 프로젝트를
+        # check 가 "ok" 라고 했다 — 매 편집마다 stderr 만 나오고 아무도 눈치채지 못하는,
+        # 이 장치에서 가장 나쁜 방향의 고장이다.
+        if not flagged and item.get("detect") and not _detected(item["detect"], project, deps):
             missing.append((iid, f"감지 실패: {item['detect']}"))
 
     # 빠진 것만 보면 반쪽이다 — **카탈로그에서 은퇴한 항목의 분기가 남아 계속 도는** 쪽도
