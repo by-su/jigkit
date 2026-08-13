@@ -1,0 +1,204 @@
+# TypeScript 스택. 형식은 library/stacks/README.md 에 있다.
+#
+# optional 의 키 하나가 프레임워크 한 덩어리다. Next 와 Nest 가 같은 prisma 를
+# 가리켜도 prisma 정의는 여기 한 곳에만 산다 — 조합은 presets.yaml 이 이름 붙인다.
+
+name: typescript
+title: TypeScript
+create: "pnpm init"
+
+base:
+  - id: biome
+    role: lint
+    surface: hook
+    install: "pnpm add -D @biomejs/biome"
+    detect: { dep: "@biomejs/biome" }
+    template: biome
+    hook:
+      event: PostToolUse
+      ext: [".ts", ".tsx", ".js", ".jsx", ".json"]
+      run: "pnpm biome check --write {file}"
+    why: "공식 MCP 없음 — RFC #6017 과 요청 이슈 #8705 가 열린 채 머지되지 않았다 [M]. 훅이 맞다"
+
+  - id: vitest
+    role: test
+    surface: mcp
+    install: "pnpm add -D vitest"
+    detect: { dep: vitest }
+    template: vitest
+    mcp: { command: npx, args: ["-y", "@vitest/mcp@latest"] }
+    why: "vitest-community/mcp 가 공식 구현이라고 밝힌다 [D-3rd]. 패키지 이름 미확인 [?] (probe/PENDING.md)"
+
+  - id: typescript
+    role: types
+    surface: gate
+    install: "pnpm add -D typescript"
+    detect: { dep: typescript }
+    gate: { run: "pnpm tsc --noEmit" }
+    why: "게이트는 하나만. 프레임워크가 자체 typecheck 를 갖는 경우 그쪽으로 바꾼다"
+
+  - id: zod
+    role: types
+    surface: library
+    install: "pnpm add zod"
+    detect: { dep: zod }
+    why: "스키마 하나로 런타임 검증과 정적 타입. 공식 MCP 없음 — llms.txt / llms-full.txt 만 있다 [M]"
+
+optional:
+  next:
+    create: "npx create-next-app@latest {dir} --ts --app --biome --use-pnpm --yes"
+    verify: ["pnpm tsc --noEmit"]
+    items:
+      - id: next
+        role: framework
+        surface: library
+        detect: { dep: next }
+        why: "create-next-app 이 프로젝트를 만든다. `--biome` 로 린터를 고르므로 ESLint 를 뒤에서 지울 필요가 없다 [M] (probe/results/stack-scaffold.md). `--yes` 가 없으면 대화형으로 멈춘다"
+      - id: next-devtools
+        role: framework
+        surface: mcp
+        detect: { mcp: next-devtools }
+        mcp: { command: npx, args: ["-y", "next-devtools-mcp@latest"] }
+        why: "Next 16+ 의 내장 /_next/mcp 를 프록시해 런타임 에러·라우트·로그를 준다 [D]"
+
+  nest:
+    # 스캐폴더가 경로를 다룰 줄 모른다 [M] (probe/results/stack-scaffold.md):
+    #   - name 에 절대경로를 주면 소문자로 낮춘다
+    #   - `--directory` 에 절대경로를 주면 **상대경로로 취급해** 현재 디렉터리 밑에 만든다
+    #   - name 을 kebab-case 로 바꾼다 (`MyApi` -> `my-api/`)
+    # 그래서 부모에서 이름만 주고 돌린다. 대상 디렉터리 이름은 kebab-case 여야 하며,
+    # 아니면 바로 다음 `cd` 단계가 실패한다 — 조용히 다른 곳에 만들어지는 것보다 낫다.
+    create: "cd {parent} && npx -y @nestjs/cli new {name} -p pnpm --skip-git --strict"
+    strips: [nest-eslint, nest-prettier]
+    verify: ["pnpm tsc --noEmit", "pnpm test"]
+    items:
+      - id: nest
+        role: framework
+        surface: library
+        detect: { dep: "@nestjs/core" }
+        why: "에이전트 표면은 `nest g` 스키매틱뿐이다 — @rekog/mcp-nest 는 반대 방향(NestJS 로 MCP 서버를 만드는 것) [D]. 린터 선택 인자가 없어 ESLint·Prettier 가 항상 깔리므로 strips 로 지운다. Jest 도 같이 오는데 그건 남긴다 — `*.spec.ts` 는 Jest(`pnpm test`), `*.test.ts` 는 Vitest 로 갈린다 [M] (probe/results/stack-scaffold.md)"
+
+  prisma:
+    verify: ["pnpm prisma validate"]
+    items:
+      - id: prisma
+        role: db
+        surface: mcp
+        install: "pnpm add -D prisma && pnpm add @prisma/client"
+        init: "pnpm prisma init"
+        detect: { dep: prisma }
+        mcp: { command: npx, args: ["-y", "prisma", "mcp"] }
+        why: "공식 로컬 MCP(마이그레이션)와 원격 MCP(mcp.prisma.io) 둘 다 있다 [D]. 로컬 실행 인자 미확인 [?]"
+      - id: prisma-format
+        role: lint
+        surface: hook
+        hook:
+          event: PostToolUse
+          ext: [".prisma"]
+          run: "pnpm prisma format --schema {file}"
+        why: "Biome 이 .prisma 를 모르므로 같은 디스패처의 다른 분기로 들어간다"
+
+  expo:
+    create: "npx create-expo-app@latest {dir}"
+    items:
+      - id: expo
+        role: mobile
+        surface: mcp
+        detect: { dep: expo }
+        mcp: { type: http, url: "https://mcp.expo.dev/mcp" }
+        why: "Expo 공식 원격 MCP — 문서·EAS 빌드·워크플로·TestFlight 크래시. Free 플랜 포함 [D]"
+      - id: mobile-mcp
+        role: mobile
+        surface: mcp
+        detect: { mcp: mobile-mcp }
+        mcp: { command: npx, args: ["-y", "@mobilenext/mobile-mcp@latest"] }
+        why: "시뮬레이터·실기기 화면을 읽고 탭·입력한다 [D]. 패키지 이름 미확인 [?]"
+
+  maestro:
+    items:
+      - id: maestro
+        role: e2e
+        surface: mcp
+        detect: { mcp: maestro }
+        mcp: { command: maestro, args: ["mcp"] }
+        why: "공식 MCP 가 Maestro CLI 에 포함돼 있다 [D]. 하위 명령 이름 미확인 [?]"
+
+  storybook:
+    verify: ["pnpm build-storybook --quiet"]
+    items:
+      - id: storybook
+        role: ui
+        surface: library
+        init: "npx storybook@latest init --yes"
+        detect: { dep: storybook }
+        why: "격리 샌드박스. 코어 자체는 에이전트 표면이 아니다"
+      - id: storybook-mcp
+        role: ui
+        surface: mcp
+        install: "pnpm add -D @storybook/addon-mcp"
+        detect: { dep: "@storybook/addon-mcp" }
+        mcp: { command: npx, args: ["-y", "@storybook/mcp"] }
+        why: "공식. dev 서버 안에서 돌고 @storybook/claude-code-plugin 도 함께 나온다 [D]"
+
+  shadcn:
+    items:
+      - id: shadcn
+        role: ui
+        surface: mcp
+        init: "npx shadcn@latest init --base base --defaults"
+        detect: { file: components.json }
+        mcp: { command: npx, args: ["shadcn@latest", "mcp"] }
+        why: "CLI 에 MCP 가 공식 내장 — 레지스트리 검색·설치를 에이전트가 직접 한다 [D]. `--base` 없이 돌리면 컴포넌트 라이브러리 선택 프롬프트에서 멈춘다 [M] (probe/results/stack-scaffold.md)"
+
+  playwright:
+    verify: ["pnpm playwright --version"]
+    items:
+      - id: playwright-agents
+        role: e2e
+        surface: agents
+        install: "pnpm add -D @playwright/test"
+        init: "npx playwright init-agents --loop=claude"
+        detect: { file: ".claude/agents/playwright-test-planner.md" }
+        why: "planner·generator·healer 서브에이전트 정의를 업스트림이 직접 출하한다 (v1.56) [D] — 이 목록에서 스킬에 가장 가까운 항목"
+      - id: playwright-mcp
+        role: e2e
+        surface: mcp
+        detect: { mcp: playwright-mcp }
+        mcp: { command: npx, args: ["@playwright/mcp@latest"] }
+        why: "탐색·수동 QA 재현용. 시각적 회귀는 여기가 아니라 toHaveScreenshot 으로 CI 에서 [J]"
+
+  testcontainers:
+    items:
+      - id: testcontainers-node
+        role: test
+        surface: library
+        install: "pnpm add -D testcontainers"
+        detect: { dep: testcontainers }
+        why: "리포지토리 계층 통합 테스트. 에이전트 표면 없음"
+
+# strips 가 가리키는 표. 스캐폴더가 깔아 놓은 것을 무엇으로 지우는지 여기 한 곳에만 적는다.
+#
+# **패키지 이름은 스캐폴더마다 다르므로 항목도 스캐폴더별로 나눈다.** `pnpm remove` 는 없는
+# 의존성에 에러를 내므로(ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS [M]) 목록이 정확해야 한다.
+# 아래는 `nest new` 결과에서 실측한 이름이다 (probe/results/stack-scaffold.md).
+strippable:
+  nest-eslint:
+    detect: { dep: eslint }
+    remove: "pnpm remove eslint @eslint/eslintrc @eslint/js eslint-config-prettier eslint-plugin-prettier globals typescript-eslint"
+    files: ["eslint.config.mjs"]
+  nest-prettier:
+    detect: { dep: prettier }
+    remove: "pnpm remove prettier"
+    files: [".prettierrc"]
+
+conflicts:
+  - [biome, prettier]
+  - [biome, eslint]
+
+# 스캐폴더와 init 이 만든 파일은 우리 포맷 규칙을 모른다 — 한 번 정리하고 verify 로 넘어간다.
+# 없으면 `pnpm biome check .` 가 남이 만든 파일의 따옴표·import 순서로 실패한다 [M].
+normalize: "pnpm biome check --write ."
+
+verify:
+  - "pnpm biome check ."
+  - "pnpm vitest run"

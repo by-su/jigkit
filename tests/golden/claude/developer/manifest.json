@@ -256,6 +256,14 @@
       "ref": "44c9b2d6e889982ac18c27d05a19fefe335194e1",
       "sha256": "aba546cca0b311c3",
       "description_tokens": 24
+    },
+    {
+      "id": "stack",
+      "dir": "stack",
+      "source": null,
+      "ref": null,
+      "sha256": "74ca7fe6660a9518",
+      "description_tokens": 37
     }
   ]
 }

@@ -1,0 +1,114 @@
+# Python 스택. 형식은 library/stacks/README.md 에 있다.
+#
+# base 는 이 언어면 거의 항상 참인 것, optional 은 골라 넣는 것이다.
+# 프리셋(presets.yaml)이 `lang: python` 을 가리키면 base 는 자동으로 포함된다.
+
+name: python
+title: Python
+create: "uv init {dir}"
+
+base:
+  - id: uv
+    role: runtime
+    surface: library
+    detect: { file: pyproject.toml }
+    why: "환경 활성화 없이 uv run 으로 실행 — 에이전트의 실행 실패가 줄어든다. 공식 MCP 없음 [M]"
+
+  - id: ruff
+    role: lint
+    surface: hook
+    install: "uv add --dev ruff"
+    detect: { dep: ruff }
+    hook:
+      event: PostToolUse
+      ext: [".py"]
+      run: "uv run ruff format {file} && uv run ruff check --fix {file}"
+    why: "공식 MCP 없음 — discussion #19639 단계 [M]. CLI 가 이미 결정론적이라 훅이 맞다"
+
+  - id: pyright
+    role: types
+    surface: gate
+    install: "uv add --dev pyright"
+    detect: { dep: pyright }
+    gate: { run: "uv run pyright" }
+    why: "게이트는 진단이 안정적인 쪽 하나만 — 두 체커를 걸면 규칙이 엇갈려 우회 습관이 생긴다"
+
+  - id: ty
+    role: types
+    surface: library
+    install: "uv add --dev ty"
+    detect: { dep: ty }
+    why: "로컬 즉시 피드백용. 0.0.50(2026-06) 베타이고 버전 간 진단이 바뀌므로 게이트에 걸지 않는다 [D]"
+
+  - id: pytest
+    role: test
+    surface: library
+    install: "uv add --dev pytest"
+    detect: { dep: pytest }
+    template: pytest
+    why: "템플릿이 스모크 테스트 하나를 깐다 — 갓 만든 프로젝트에서도 verify 가 신호를 준다"
+
+optional:
+  fastapi:
+    verify: ["uv run pytest -q"]
+    items:
+      - id: fastapi
+        role: backend
+        surface: library
+        install: "uv add 'fastapi[standard]'"
+        detect: { dep: fastapi }
+        why: "타입 힌트에서 검증과 OpenAPI 가 함께 파생된다. 공식 MCP 없음 (llms.txt PR #13977 미머지) [M]"
+
+  sqlmodel:
+    requires: [fastapi]
+    items:
+      - id: sqlmodel
+        role: db
+        surface: library
+        install: "uv add sqlmodel"
+        detect: { dep: sqlmodel }
+        why: "클래스 하나로 테이블과 응답 스키마를 겹쳐 쓴다. 에이전트 표면 없음"
+
+  testcontainers:
+    items:
+      - id: testcontainers
+        role: test
+        surface: library
+        install: "uv add --dev testcontainers"
+        detect: { dep: testcontainers }
+        why: "모킹으로 안 잡히는 실제 쿼리·마이그레이션 오류를 잡는다. 에이전트 표면 없음 — 제공하는 MCP 모듈은 반대 방향(게이트웨이 테스트용) [D]"
+
+  locust:
+    items:
+      - id: locust
+        role: perf
+        surface: library
+        install: "uv add --dev locust"
+        detect: { dep: locust }
+        why: "시나리오가 파이썬 코드라 에이전트가 직접 쓴다. 배포 전 처리량 회귀용"
+
+  logfire:
+    items:
+      - id: logfire
+        role: observability
+        surface: mcp
+        install: "uv add logfire"
+        detect: { dep: logfire }
+        mcp: { command: uvx, args: ["logfire-mcp@latest"] }
+        why: "Pydantic 공식 MCP — 트레이스·SQL 조회 [D]. 실행 인자는 미확인 [?] (probe/PENDING.md)"
+
+# 쌍의 한쪽은 우리가 넣는 id, 다른 쪽은 프로젝트에 이미 있을 수 있는 도구다
+# (이름을 의존성으로 찾는다). 같은 role 에 gate 표면이 둘 들어오는 것은
+# 여기 적지 않아도 stacks.py 가 구조적으로 막는다.
+conflicts:
+  - [ruff, black]
+  - [ruff, flake8]
+  - [ruff, isort]
+  - [pyright, mypy]
+
+# 스캐폴더가 만든 파일은 우리 포맷 규칙을 모른다 — 한 번 정리하고 verify 로 넘어간다.
+normalize: "uv run ruff format . && uv run ruff check --fix ."
+
+verify:
+  - "uv run ruff check ."
+  - "uv run pytest -q"

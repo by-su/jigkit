@@ -16,8 +16,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import commands  # noqa: E402
 import launchgate  # noqa: E402
+import mdblock  # noqa: E402
 import sources  # noqa: E402
+import stacks  # noqa: E402
 import touched  # noqa: E402
+import stack_apply  # noqa: E402
 from build import BUILD, BuildError, HARNESS, compile_profile, discover, discover_fixtures, launch_argv, load_profile, write_readback  # noqa: E402
 from sources import SourceError  # noqa: E402
 
@@ -151,6 +154,24 @@ def _flag_value(args: list[str], flag: str) -> str | None:
     if i + 1 >= len(args):
         die(f"{flag} 뒤에 값이 필요하다")
     return args[i + 1]
+
+
+def positionals(args: list[str], value_flags: set[str]) -> list[str]:
+    """위치 인자만. **값을 받는 플래그의 값은 위치 인자가 아니다.**
+
+    이걸 안 걸러서 `--with a,b <경로>` 의 `a,b` 가 프로젝트 경로로 잡혔다 — 그 결과
+    `<경로>/a,b` 를 대상으로 삼고 "없다" 고 실패했다. 실행해 봐야 나오는 종류의 버그라
+    tests/test_gate.py 에 케이스를 남겼다.
+    """
+    out, skip = [], False
+    for arg in args:
+        if skip:
+            skip = False
+        elif arg in value_flags:
+            skip = True
+        elif not arg.startswith("-"):
+            out.append(arg)
+    return out
 
 
 def cmd_source(rest: list[str]) -> None:
@@ -305,6 +326,74 @@ def cmd_skills(rest: list[str]) -> None:
     print(f"\n합계 {len(ids)} 스킬 · 설명 ~{total:,}토큰 (전부 켤 경우 매 세션 비용)")
 
 
+def cmd_stack(rest: list[str]) -> None:
+    """스택 카탈로그. 읽기만 하는 하위 명령이 기본이고, 쓰는 것은 `apply --apply` 뿐이다."""
+    sub, args = (rest[0] if rest else "list"), rest[1:]
+    # 모르는 플래그를 조용히 무시하면 `--with=a,b` 나 오타(`--aply`)가 **성공한 것처럼**
+    # 지나간다 — 요청한 항목이 빠진 배치를 "됐다" 고 보고하는 형태다.
+    if unknown := [a for a in args if a.startswith("-") and a not in
+                   ("--with", "--plan", "--apply")]:
+        die(f"모르는 플래그: {' '.join(unknown)} (값은 `--with a,b` 처럼 띄어서 준다)")
+    pos = positionals(args, value_flags={"--with"})
+    with_raw = _flag_value(args, "--with")
+    with_keys = [k for k in (with_raw or "").split(",") if k]
+    # 플래그 판정은 rest 로 한다 — 소비 이디엄이 그래야 새 CLI 표면 검사에 잡힌다
+    # (tests/test_gate.py 의 플래그 카나리아). 하위 명령이 플래그와 같을 수는 없다.
+    want_plan, want_write = "--plan" in rest, "--apply" in rest
+
+    def combo_for(need_spec: bool = True) -> dict:
+        if need_spec and not pos:
+            die(f"jig stack {sub} <언어|프리셋|alias> [--with a,b]")
+        return stacks.resolve(pos[0], with_keys)
+
+    try:
+        if sub == "list":
+            for line in stacks.list_lines():
+                print(line)
+
+        elif sub == "show":
+            combo = combo_for()
+            target = Path(pos[1]).expanduser().resolve() if len(pos) > 1 else Path.cwd()
+            if want_plan:
+                print(f"# {combo['label']} → {target}")
+                print("# 스킬이 이 순서로 실행한다. 인자를 바꿔야 했으면 그 사실을 말한다.")
+                for step, cmd in stacks.plan(combo, target):
+                    print(f"{step:<9} {cmd}")
+            else:
+                for line in stacks.show_lines(combo):
+                    print(line)
+
+        elif sub == "apply":
+            combo = combo_for()
+            project = Path(pos[1]).expanduser().resolve() if len(pos) > 1 else Path.cwd()
+            print(f"{combo['label']} → {project}"
+                  f"{'' if want_write else '   (dry-run — 쓰지 않는다)'}")
+            for line in stack_apply.apply(combo, project, write=want_write):
+                print(f"  {line}" if line else "")
+            if not want_write:
+                print("\n실제로 쓰려면 같은 명령에 --apply 를 붙인다.")
+
+        elif sub == "check":
+            spec_pos = pos[0] if pos else None
+            if not spec_pos:
+                die("jig stack check <언어|프리셋|alias> [프로젝트]")
+            project = Path(pos[1]).expanduser().resolve() if len(pos) > 1 else Path.cwd()
+            combo = stacks.resolve(spec_pos, with_keys)
+            missing = stacks.check(combo, project)
+            if not missing:
+                print(f"ok   {combo['label']} 대로 배치돼 있다 ({project})")
+                return
+            print(f"{combo['label']} — 어긋난 것 {len(missing)}건 ({project})")
+            for iid, why in missing:
+                print(f"  {iid:<20} {why}")
+            raise SystemExit(1)
+
+        else:
+            die(f"jig stack <list|show|check|apply> — 받은 것: {sub}")
+    except stacks.StackError as e:
+        die(str(e))
+
+
 def cmd_selftest() -> None:
     """게이트와 라우팅의 단위 검사.
 
@@ -324,8 +413,13 @@ def cmd_docs(rest: list[str]) -> None:
     write = "--update" in rest
     try:
         stale = commands.apply(write=write)
+        # 카탈로그도 같은 장치다 — 손으로 쓰면 데이터와 어긋난다.
+        if mdblock.apply_block(stacks.CATALOG, stacks.MARKERS, stacks.render_catalog(), write):
+            stale.append("library/stacks/README.md")
     except LookupError as e:
         # 마커가 지워졌거나 옮겨졌다. 트레이스백 대신 무엇을 되살려야 하는지 말한다.
+        die(str(e))
+    except stacks.StackError as e:
         die(str(e))
     if write:
         for t in stale:
@@ -335,9 +429,9 @@ def cmd_docs(rest: list[str]) -> None:
         return
     if stale:
         for t in stale:
-            print(f"FAIL {t}: 명령 블록이 낡았다. `jig docs --update`")
+            print(f"FAIL {t}: 생성 블록이 낡았다. `jig docs --update`")
         raise SystemExit(1)
-    print("ok   명령 블록이 최신이다 (bin/jig · README.md · README.ko.md)")
+    print("ok   생성 블록이 최신이다 (bin/jig · README.md · README.ko.md · library/stacks/README.md)")
 
 
 def cmd_touched(rest: list[str]) -> None:
@@ -669,6 +763,8 @@ def main() -> None:
             cmd_source(rest)
         elif cmd == "sync":
             cmd_sync(rest)
+        elif cmd == "stack":
+            cmd_stack(rest)
         elif cmd == "skills":
             cmd_skills(rest)
         elif cmd == "usage":

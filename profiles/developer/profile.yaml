@@ -28,7 +28,7 @@ permissions:
 # 발견 단계 — 등록한 소스를 통째로 켜 두었다.
 # 스킬 본문을 사람이 다 읽고 고를 수는 없으므로, 켜 놓고 `jig usage` 로 무엇이 실제로
 # 불리는지 재고 나서 개별 id 로 좁힌다. 좁히는 것은 이 줄 한 줄을 고치는 일이다.
-skills: ["anthropics/*", "obra/*"]
+skills: ["anthropics/*", "obra/*", stack]
 agents: []
 
 # 이 단계가 실제로 쓰는 MCP 서버만 (library/mcp/<id>.json). 기본은 없음.

@@ -1,0 +1,59 @@
+# 언어 중립 도구. 이 파일은 `create` 를 갖지 않는다 — 단독으로 프로젝트가 되지 않는다.
+#
+# base 가 비어 있다: 언어와 달리 "이 프로젝트면 항상 참" 인 것이 없다.
+# 전부 optional 이고, 프리셋이나 --with 로 골라 넣는다.
+
+name: common
+title: 언어 중립
+
+base: []
+
+optional:
+  semgrep:
+    items:
+      - id: semgrep
+        role: security
+        surface: gate
+        install: "uvx semgrep --version"
+        detect: { file: .semgrep.yml }
+        gate: { run: "uvx semgrep --config auto --error" }
+        why: "semgrep/mcp 리포는 deprecated 이고 바이너리로 통합됐다 [D]. Claude Code 내장 /security-review 와 겹치므로 게이트 쪽만 쓴다"
+
+  posthog:
+    items:
+      - id: posthog
+        role: analytics
+        surface: mcp
+        detect: { mcp: posthog }
+        mcp: { command: npx, args: ["-y", "@posthog/mcp-server"] }
+        why: "공식. 리포는 PostHog/mcp (모노레포로 이동) [D]"
+
+  sentry:
+    items:
+      - id: sentry
+        role: observability
+        surface: mcp
+        detect: { mcp: sentry }
+        mcp: { type: http, url: "https://mcp.sentry.dev/mcp" }
+        why: "행동 분석(PostHog)만 있으면 에러·트레이스가 빈다. 엔드포인트 미확인 [?]"
+
+  figma:
+    items:
+      - id: figma
+        role: design
+        surface: mcp
+        detect: { mcp: figma }
+        mcp: { type: http, url: "https://mcp.figma.com/mcp" }
+        why: "디자인↔코드 양방향. 엔드포인트 미확인 [?] — 앱 커넥터로 붙는 경우가 많다"
+
+  docker:
+    items:
+      - id: docker
+        role: container
+        surface: library
+        detect: { file: Dockerfile }
+        why: "로컬 빌드·로그는 Bash 가 이긴다 — MCP 를 붙이면 도구 정의만 컨텍스트를 먹는다 [J]. 공식 docker/mcp-gateway 는 성격이 다른 물건(MCP 서버들을 컨테이너로 격리 실행하는 게이트웨이)이다 [D]"
+
+conflicts: []
+
+verify: []

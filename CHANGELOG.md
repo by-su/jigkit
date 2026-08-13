@@ -19,6 +19,21 @@
 
 ### Added
 
+- **스택 카탈로그**: 언어·기능별로 어떤 도구를 **어떤 표면**(MCP · agents · 훅 · 게이트 ·
+  설치만)으로 붙이는지를 `library/stacks/*.yaml` 한 곳에 두고, 카탈로그 문서와 배치 절차를
+  거기서 생성한다 (`library/stacks/README.md`)
+- **`jig stack`**: `list` · `show [--with] [--plan]` · `apply [--apply]` · `check`.
+  `apply` 는 훅 디스패처·설정 파일·MCP 정의를 배치하고 기본은 dry-run 이다
+  (`adapters/stacks.py`, `adapters/claude/stack_apply.py`)
+- **프리셋과 alias**: `api`(FastAPI) · `web-app`(Next.js) · `nest-api` · `mobile` · `ui-lib`.
+  "fastapi 로 백엔드 만들어줘" 가 추론이 아니라 조회로 풀린다 (`library/stacks/presets.yaml`)
+- **`stack` 스킬**: 프로젝트 생성·스택 추가 요청에서 발동해 조합을 조회하고 `--plan` 을
+  실행한 뒤 `check` 로 대조한다. developer 프로필에 켜져 있다
+  (`library/skills/stack/SKILL.md`)
+- **분기 은퇴**: 카탈로그에서 항목을 지우면 이미 적용된 프로젝트의 훅 분기도 다음 `apply` 에
+  사라지고, 무엇을 지웠는지 출력한다. 다른 스택이 쓰는 분기는 카탈로그 정의로 다시 렌더해
+  유지한다. `jig stack check` 는 apply 없이도 남아 있는 분기를 짚는다
+  (`adapters/claude/stack_apply.py`)
 - **프로필 컴파일러와 런처**: `profile.yaml` + `BRIEF.md` 를 `build/claude/<name>/` 의
   실제 Claude Code 플러그인(설정·MCP 설정·시스템 프롬프트 포함)으로 컴파일하고,
   `--plugin-dir` 로 띄워 `~/.claude` 에는 아무것도 쓰지 않는다. 컨텍스트는 기동 시점에
