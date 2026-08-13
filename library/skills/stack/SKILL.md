@@ -43,8 +43,10 @@ jig stack show <조합> --plan <디렉터리>
 - 훅 JSON·설정 파일·MCP 정의는 **직접 쓰지 않는다.** `apply` 단계가 한다 — 손으로 쓰면
   멱등성이 깨지고 다른 스택의 분기가 지워진다 (실측: `probe/results/stack-hooks.md`).
 
-기존 프로젝트에 추가하는 경우에는 `create` 없이 `jig stack apply <조합> <프로젝트> --apply`
-하나로 끝난다. `--apply` 없이 먼저 돌려 무엇이 바뀌는지 보여준다.
+**기존 프로젝트에 추가하는 경우에도 `--plan` 을 쓴다.** `apply` 는 훅·설정·MCP 정의만 쓰고
+**의존성을 설치하지 않는다** — `apply` 만 돌리면 훅과 게이트가 깔리지 않은 도구를 가리키고,
+매 편집마다 stderr 만 나온다. `--plan` 은 대상이 비어 있지 않으면 `create`·`strip` 을 알아서
+빼고 `install`·`init`·`apply`·`normalize`·`verify` 만 낸다. 먼저 `--apply` 없이 보여준다.
 
 ## 4. 결과를 대조한다
 

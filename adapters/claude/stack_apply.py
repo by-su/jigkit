@@ -174,12 +174,29 @@ def _settings_with(settings: dict, event: str, matcher: str, command: str) -> bo
     그리고 matcher 도 건드리지 않는다. 우리 핸들러가 남의 항목 안에 있다면 그건 사람이
     그렇게 둔 것이므로 그 항목의 조건은 그 사람 것이다.
     """
-    hooks = settings.setdefault("hooks", {})
-    entries = hooks.setdefault(event, [])
+    # 남의 파일이므로 형태를 가정하지 않는다 — `{"hooks": null}` 이나 배열이 들어와도
+    # 트레이스백이 아니라 진단으로 나가야 한다.
+    if settings.get("hooks") is None:
+        settings["hooks"] = {}
+    hooks = settings["hooks"]
+    if not isinstance(hooks, dict):
+        raise stacks.StackError("settings.json 의 hooks 가 객체가 아니다 — 손대지 않는다")
+    if hooks.get(event) is None:
+        hooks[event] = []
+    entries = hooks[event]
+    if not isinstance(entries, list):
+        raise stacks.StackError(f"settings.json 의 hooks.{event} 가 배열이 아니다 — 손대지 않는다")
+
     want = {"type": "command", "command": f'"$CLAUDE_PROJECT_DIR"/{command}'}
     for entry in entries:
+        if not isinstance(entry, dict):
+            continue
         handlers = entry.get("hooks") or []
+        if not isinstance(handlers, list):
+            continue
         for i, handler in enumerate(handlers):
+            if not isinstance(handler, dict):
+                continue
             if command in (handler.get("command") or ""):
                 if handler == want:
                     return False

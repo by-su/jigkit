@@ -390,7 +390,9 @@ def cmd_stack(rest: list[str]) -> None:
 
         else:
             die(f"jig stack <list|show|check|apply> — 받은 것: {sub}")
-    except stacks.StackError as e:
+    # 마커가 어긋난 파일(LookupError)과 되읽기 실패(BuildError)도 남의 저장소에서 나온다 —
+    # 트레이스백 대신 무엇이 문제인지 말한다.
+    except (stacks.StackError, LookupError, BuildError) as e:
         die(str(e))
 
 

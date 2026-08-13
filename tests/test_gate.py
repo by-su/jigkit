@@ -705,6 +705,27 @@ with tempfile.TemporaryDirectory() as _tmp:
     check("check: 배치 후에는 빈 목록",
           [i for i, _ in stacks.check(stacks.resolve("typescript"), _proj)], [])
 
+    # 훅·게이트는 걸렸는데 도구가 안 깔린 상태를 "ok" 라고 하면 안 된다 — 표면 검사와
+    # detect 를 **둘 다** 본다. 매 편집마다 stderr 만 나오는 형태가 여기서 새어 나갔다.
+    with tempfile.TemporaryDirectory() as _bare:
+        _b = Path(_bare)
+        (_b / "pyproject.toml").write_text('[project]\nname = "t"\n', encoding="utf-8")
+        stack_apply.apply(_api, _b, write=True)
+        check("check: 훅은 걸렸지만 도구가 안 깔리면 잡는다",
+              {i for i, _ in stacks.check(_api, _b)} >= {"ruff", "pyright"}, True)
+
+    # 스킬이 이 줄을 그대로 실행한다 — 공백이 든 경로가 감싸여야 한다.
+    _spaced = stacks.plan(_api, Path("/tmp/jig selftest/api"))
+    check("--plan: 공백이 든 경로를 감싼다",
+          all("'/tmp/jig selftest/api'" in c for s, c in _spaced if s != "apply"), True)
+
+    # 형태가 이상한 남의 settings.json 에 트레이스백을 내지 않는다.
+    (_proj / ".claude" / "settings.json").write_text('{"hooks": null}', encoding="utf-8")
+    stack_apply.apply(_api, _proj, write=True)
+    check("배치: hooks 가 null 이어도 진단으로 처리한다",
+          isinstance(json.loads((_proj / ".claude" / "settings.json")
+                                .read_text(encoding="utf-8"))["hooks"], dict), True)
+
     _fmt.write_text(_merged.replace("# ruff", "# gone"), encoding="utf-8")
     check("check: 분기를 지우면 그 항목이 나온다",
           [i for i, _ in stacks.check(_api, _proj) if i == "ruff"], ["ruff"])
