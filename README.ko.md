@@ -235,6 +235,28 @@ Claude 는 자기를 재시작할 수 없다. 그래서 세션 안의 `/profile`
   다음: 이 세션을 닫고  jig designer
 ```
 
+### 끝나지 않은 단계는 다음 기동을 막는다
+
+판정 결과는 `.harness/state.json` 의 `done: {passed, total, unmet}` 에 기록되고,
+다음 기동이 그것을 읽는다. 이전 단계가 완료 조건에 못 미친 채 끝났으면 **전진**은
+거부된다. 같은 프로필 재기동은 복구 경로이므로 절대 막지 않는다.
+
+```
+$ jig reviewer
+jig: ✗ developer 단계 미완 (done_when 3/4 — 2026-08-13T09:00:00+00:00 기록)
+  ⚠ 전체 테스트 스위트 미실행
+  돌아가려면:   jig developer
+  그래도 진행:  JIG_GATE_BYPASS=1 jig reviewer
+```
+
+`JIG_TOUCHED_BYPASS` 와 마찬가지로 환경 변수라, 우회는 트랜스크립트에 흔적을 남긴다.
+
+커밋 게이트와 달리 이 게이트는 의도적으로 **fail-open** 이다: state 파일이 없거나
+판정 기록이 없으면 조용히 기동한다 — `/profile` 이 안 불린 세션은 오류가 아니라
+정상 경로다. 이 게이트는 "지난 단계가 3/4 라고 했었지" 라는 사용자의 기억을 대신하는
+것이지 강제가 아니다. 판정을 기록하는 스킬 자체가 프롬프트 계층이기도 하다.
+차단 케이스와 복구 경로는 `jig selftest` 가 지킨다.
+
 ## 격리가 뜻하는 것과 뜻하지 않는 것
 
 **뜻한다** — 실측 ([`probe/results/phase0.md`](probe/results/phase0.md)):

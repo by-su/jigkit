@@ -252,6 +252,31 @@ to run next.
   next: close this session and run  jig designer
 ```
 
+### An unfinished stage blocks the next launch
+
+The verdict is recorded — `done: {passed, total, unmet}` in `.harness/state.json`.
+The next launch reads it: if the previous stage stopped short of its
+done-conditions, moving **forward** is refused. Relaunching the same profile is
+the recovery path, so it is never blocked.
+
+```
+$ jig reviewer
+jig: ✗ developer 단계 미완 (done_when 3/4 — 2026-08-13T09:00:00+00:00 기록)
+  ⚠ 전체 테스트 스위트 미실행
+  돌아가려면:   jig developer
+  그래도 진행:  JIG_GATE_BYPASS=1 jig reviewer
+```
+
+An environment variable, like `JIG_TOUCHED_BYPASS`, so the bypass leaves a trace
+in the transcript.
+
+Unlike the commit gate, this gate is deliberately **fail-open**: no state file,
+or a record without a verdict, launches silently — sessions where `/profile`
+never ran are the normal case, not an error. It stands in for the user's memory
+of "the last stage said 3/4", not for enforcement; the skill that writes the
+verdict is itself prompt-level. `jig selftest` covers the blocking cases and the
+recovery path.
+
 ## What isolation does and does not mean
 
 **Does**, measured ([`probe/results/phase0.md`](probe/results/phase0.md)):

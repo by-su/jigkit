@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import commands  # noqa: E402
+import launchgate  # noqa: E402
 import sources  # noqa: E402
 import touched  # noqa: E402
 from build import BUILD, BuildError, HARNESS, compile_profile, discover, discover_fixtures, launch_argv, load_profile, write_readback  # noqa: E402
@@ -73,6 +74,18 @@ def cmd_run(name: str, project: Path, extra: list[str]) -> None:
     # `_template` 은 name 불일치로 **우연히** 막혀 있었을 뿐이다.
     if name.startswith("_"):
         die(f"'{name}' 은 프로필이 아니다 (템플릿·픽스처). `jig list` 로 확인.")
+
+    # 기동 게이트: /profile 이 남긴 done_when 미충족 기록이 있으면 전진을 막는다.
+    # record_state() 가 state.json 을 덮어쓰므로 반드시 그 전에 읽는다.
+    try:
+        state = json.loads((project / ".harness" / "state.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        state = None  # 기록 부재·파싱 실패는 통과 — 게이트는 기록된 미충족에만 반응한다
+    kind, msg = launchgate.verdict(state, name, os.environ)
+    if kind == "block":
+        die(msg)
+    if kind == "bypass":
+        print(f"  {msg}", file=sys.stderr)
 
     argv = launch_argv(name, project)
     missing = record_state(name, project)

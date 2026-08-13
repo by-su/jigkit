@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""커밋 게이트와 문서 라우팅의 단위 검사.
+"""커밋 게이트·기동 게이트와 문서 라우팅의 단위 검사.
 
 **false negative 가 이 장치의 진짜 위험이다.** 게이트가 안 뜨면 아무 일도 안 일어난
 것처럼 보이고, 그래서 조용히 무력화된 상태를 아무도 눈치채지 못한다. golden 은
@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "adapters"))
 
 import commands  # noqa: E402
+import launchgate  # noqa: E402
 import touched  # noqa: E402
 
 
@@ -191,6 +192,50 @@ no_diff, _ = touched.report("HEAD..HEAD")
 for p in touched.CODE_PATHS:
     check(f"변경 없음 메시지가 {p} 를 반영한다", p in no_diff, True)
 
+# ---------------------------------------------------------------- 기동 게이트
+
+# 커밋 게이트와 fail-open 방향이 반대다: 기록 부재는 정상 경로(스킬 미실행·구 스키마)라
+# 조용히 통과하고, **기록된 미충족**에만 반응한다. 여기서 지켜야 하는 회귀는 둘 —
+# 차단이 조용히 꺼지는 것과, 복구 경로(같은 프로필 재기동)가 막히는 것.
+
+_UNMET = {"profile": "developer", "ts": "2026-08-13T09:00:00+00:00",
+          "done": {"passed": 3, "total": 4, "unmet": ["전체 테스트 스위트 미실행"]}}
+
+kind, msg = launchgate.verdict(_UNMET, "reviewer", {})
+check("미충족 기록 + 다른 프로필 → 차단", kind, "block")
+for needle in ["developer", "3/4", "jig developer",
+               f"{launchgate.BYPASS}=1 jig reviewer", "전체 테스트 스위트 미실행"]:
+    check(f"차단 메시지에 {needle!r} 가 있다", needle in msg, True)
+
+# 복구 경로 — "돌아가려면 jig developer" 가 막히면 되돌아갈 수 없다.
+check("미충족 기록 + 같은 프로필 재기동 → 통과",
+      launchgate.verdict(_UNMET, "developer", {})[0], "pass")
+
+check("충족 기록(passed == total) → 통과",
+      launchgate.verdict({"profile": "developer",
+                          "done": {"passed": 4, "total": 4}}, "reviewer", {})[0], "pass")
+check("done 없음(스킬 미실행·구 스키마) → 통과",
+      launchgate.verdict({"profile": "developer", "next": "reviewer"},
+                         "reviewer", {})[0], "pass")
+check("state 없음(파일 부재·파싱 실패) → 통과",
+      launchgate.verdict(None, "reviewer", {})[0], "pass")
+check("이상형 done(passed 누락) → 통과 (fail-open 명시)",
+      launchgate.verdict({"profile": "developer", "done": {"total": 4}},
+                         "reviewer", {})[0], "pass")
+check("이상형 done(비정수) → 통과 (fail-open 명시)",
+      launchgate.verdict({"profile": "developer",
+                          "done": {"passed": "3", "total": 4}}, "reviewer", {})[0], "pass")
+
+kind, msg = launchgate.verdict(_UNMET, "reviewer", {launchgate.BYPASS: "1"})
+check("우회 → bypass", kind, "bypass")
+check("우회에도 흔적 메시지가 있다", bool(msg), True)
+# 커밋 게이트 검사와 같은 정신 — 오타난 우회는 우회가 아니다.
+check("오타난 우회 키 → 차단",
+      launchgate.verdict(_UNMET, "reviewer", {launchgate.BYPASS + "_TYPO": "1"})[0],
+      "block")
+check("빈 값 우회는 우회가 아니다",
+      launchgate.verdict(_UNMET, "reviewer", {launchgate.BYPASS: ""})[0], "block")
+
 # ---------------------------------------------------------------- 결과
 
 if _failures:
@@ -198,4 +243,4 @@ if _failures:
     for f in _failures:
         print(f"  {f}\n")
     raise SystemExit(1)
-print("ok   커밋 게이트 · 문서 라우팅 검사 통과")
+print("ok   커밋 게이트 · 기동 게이트 · 문서 라우팅 검사 통과")
