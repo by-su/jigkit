@@ -60,8 +60,35 @@ cd jigkit
 ```
 
 어디에 클론해도 된다. `bootstrap.sh` 는 자기 위치에서 경로를 유도하므로 하드코딩이 없다.
-Claude Code · `python3` · PyYAML · `git` 을 확인하고, 등록된 스킬 소스를
-`library/cache/` 로 받고, `jig doctor` 로 실제 동작을 확인한다. 다시 실행해도 안전하다.
+Claude Code · `python3` · PyYAML · `git` 을 확인하고, 기본 전역 지침을 깔고, 등록된 스킬
+소스를 `library/cache/` 로 받고, `jig doctor` 로 실제 동작을 확인한다. 다시 실행해도
+같은 상태가 된다.
+
+그 기본값은 [`core/GLOBAL_CLAUDE.md`](../../core/GLOBAL_CLAUDE.md) 를 `~/.claude/CLAUDE.md`
+로 복사한 것이다 — Karpathy 행동 지침과 응답 언어 규칙이다. 이 파일은 모든 세션에 실린다.
+프로필 세션도 그렇다는 것을 쟀다
+([`probe/results/memory-files.md`](../../probe/results/memory-files.md)).
+새 머신이 빈손으로 시작하지 않게 하는 자리다. **병합이 아니라 덮어쓴다** — 이 스크립트는
+하나의 알려진 상태를 만드는 것이 일이고, `reset-and-setup.sh` 로 들어왔다면 어차피
+`~/.claude` 를 밀고 온다. 다만 이 머신에 손으로 쓴 전역 지침이 있다면 먼저 옮겨 둔다.
+
+언어는 세팅할 때 정하거나 나중에 바꾼다. 둘 다 같은 파일을 쓴다:
+
+```bash
+./bootstrap.sh --lang English    # 세팅 시점 (reset-and-setup.sh 도 받는다)
+jig lang English                 # 나중에 — 고쳐 쓰고 다시 깐다
+jig lang                         # 지금 뭐로 돼 있나. 아무것도 쓰지 않는다
+jig lang --install               # 언어는 그대로 두고 다시 깔기만
+```
+
+`jig lang` 은 저장소의 템플릿을 고친 뒤 다시 깐다. 설치본만 고치면 된 것처럼 보이다가
+다음 bootstrap 이 조용히 되돌린다 — 그래서 진실은 저장소 쪽에 둔다.
+
+무인자는 조회라서 아무것도 쓰지 않고, `--install` 이 `--lang` 없이 부른 `bootstrap.sh` 가
+쓰는 형태다. 처음에는 둘이 한 명령이었다 — 무인자가 보고와 설치를 겸했다 — 그리고 그
+결과는 **bootstrap 의 기본 경로가 `ok global` 을 찍으면서 아무것도 안 깔던 것**이었다.
+기존 `~/.claude/CLAUDE.md` 를 처음 덮을 때는 원본을 옆에 `CLAUDE.md.jigkit-backup` 으로
+남긴다. 이후 실행은 그 백업을 건드리지 않는다 — 지킬 가치가 있는 것은 사람이 쓴 그 한 벌이다.
 
 PATH 는 **출력만 한다** — 셸 설정을 말없이 고치지 않는다. `--path` 를 주면 추가해 주고,
 `--no-sync` 를 주면 네트워크를 타지 않는다.
@@ -99,6 +126,7 @@ jig growth 0 10 25 50                       # 스킬 N개일 때의 비용 곡�
 jig golden [--update]                       # 컴파일러 회귀 검사
 jig argv <프로필>                           # 기동 인자만 출력 (실행하지 않음)
 jig new <이름>                              # 템플릿에서 새 프로필 생성
+jig lang [언어]                             # 전역 지침의 응답 언어를 바꾼다 (인자 없으면 현재 값)
 
 # 스킬 소스
 jig source add <url> [--as N]               # 오픈소스 스킬 저장소 등록 (링크 + SHA 만)
@@ -137,6 +165,26 @@ profiles/developer/
 프로필이 복사나 심볼릭 링크 없이 하나를 공유한다. `jig build` 가 그걸 전부 풀어서
 `build/claude/<name>/` 을 만든다 — 진짜 Claude Code 플러그인에 설정·MCP 설정·시스템
 프롬프트가 붙은 형태다.
+
+시스템 프롬프트에는 프로젝트의 `CLAUDE.md` 도 함께 실린다. 정리 차원이 아니다 —
+프로필 세션은 `--setting-sources user` 로 뜨는데, 이 플래그가 프로젝트 설정뿐 아니라
+**프로젝트 `CLAUDE.md` 자동 발견까지 함께 끈다**. 실측이고 어디에도 안 적혀 있다
+([`probe/results/memory-files.md`](../../probe/results/memory-files.md)).
+`user,project` 로 되돌리면 프로젝트의 훅과 권한 덮어쓰기가 같이 돌아오는데, 그것을
+막으려고 이 플래그를 붙인 것이다. 그래서 컴파일러가 빌드 시점에 **내용만** 가져오고
+배선은 배제된 채로 둔다. 사용자 전역 `~/.claude/CLAUDE.md` 는 어느 경우에도 CLI 가
+그대로 싣는다 — 세션에는 둘 다 올라간다.
+
+여기서 할 일의 전부는 **CLI 의 발견 범위를 그대로 덮는 것**이다. 좁으면 조용히 실패하기
+때문이다 — 지침을 적어 뒀는데 그냥 없다. 실측상 CLI 는 `CLAUDE.md` · `CLAUDE.local.md` 와
+그 안의 `@경로` import 를 싣고, 컴파일러도 셋을 따라간다. 프로젝트 루트에서 **일부러
+멈춘다** — `project` 는 사용자가 지정한 경계이므로 위쪽 디렉터리의 `CLAUDE.md` 는 범위
+밖이다. UTF-8 로 안 읽히는 파일은 기동을 죽이지 않고 stderr 경고와 함께 뺀다.
+
+대가는 분명히 적어 둔다: 프로젝트 텍스트가 이제 **시스템 프롬프트**라는 가장 높은 신뢰
+채널로 세션에 들어온다. 권한은 그대로 선다 — deny 규칙은 프로필의 것이지 프로젝트의
+것이 아니다 — 하지만 클론한 저장소의 `CLAUDE.md` 에 적힌 지시는 지시로 읽힌다.
+신뢰하지 않는 저장소 안에서 프로필을 띄우지 마라.
 
 프로필은 페르소나가 아니라 **무엇을 읽고, 무엇을 쓰고, 무엇을 못 만지는지**로 정의된다.
 [`PRINCIPLES.md`](../PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다) 를 보라 —
@@ -514,9 +562,10 @@ CHANGELOG.md           사람용 변경 이력 — 에이전트는 현재 상태
 docs/PRINCIPLES.md     원칙, 출처, 그리고 각각을 무엇이 강제하는가
 docs/QUICK_START.md    설치부터 첫 세션까지, 그대로 복사해 실행
 docs/ko/               번역 — docs/<lang>/X.md 가 정본 X.md 를 그대로 따른다
-bootstrap.sh           첫 설치: 의존성 확인, 캐시 하이드레이션, 동작 검증
+bootstrap.sh           첫 설치: 의존성 확인, 전역 기본 지침, 캐시 하이드레이션, 동작 검증
 reset-and-setup.sh     Claude Code 초기화 후 bootstrap (파일 하나로 단독 실행)
 core/                  항상 로드: PREAMBLE.md 와 /profile 스킬
+core/GLOBAL_CLAUDE.md  기본 ~/.claude/CLAUDE.md — bootstrap 이 깐다
 library/sources.yaml   등록된 스킬 저장소 — 링크와 고정 SHA
 library/cache/<ns>/    받아둔 저장소 내용 (gitignore, 지워도 되는 파생물)
 library/               로컬 스킬·에이전트·MCP 정의. 한 벌씩만

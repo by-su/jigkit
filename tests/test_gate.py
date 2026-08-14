@@ -830,6 +830,125 @@ with tempfile.TemporaryDirectory() as _tmp:
     except stacks.StackError as e:
         check("남의 파일 -> 거부", "생성 마커가 없다" in str(e), True)
 
+# ---------------------------------------------------------------- 프로젝트 지침 편입
+#
+# 프로필 세션은 `--setting-sources user` 로 뜨고, 그 플래그가 프로젝트 `CLAUDE.md`
+# 자동 발견까지 함께 끈다 [M: probe/results/memory-files.md]. 그래서 컴파일러가 내용을
+# 시스템 프롬프트로 편입한다. **golden 은 이 분기를 지나가지 않는다** — 골든 프로젝트는
+# `/__golden__` 이라 `CLAUDE.md` 가 없기 때문이다. 빠지면 조용히 빠진다.
+
+import build  # noqa: E402
+
+_dev = build.load_profile("developer")
+
+with tempfile.TemporaryDirectory() as _d:
+    _p = Path(_d)
+    check("CLAUDE.md 없음 -> 편입 없음", build.project_memory(_p), None)
+
+    (_p / "CLAUDE.md").write_text("   \n\n", encoding="utf-8")
+    check("빈 CLAUDE.md -> 편입 없음", build.project_memory(_p), None)
+
+    (_p / "CLAUDE.md").write_text("# 프로젝트 규칙\n\n마커 PROJ_MEM_TEST 를 지킨다.\n",
+                                  encoding="utf-8")
+    _sp = build.build_system_prompt(_dev, _p)
+    check("CLAUDE.md -> 시스템 프롬프트에 들어온다", "마커 PROJ_MEM_TEST 를 지킨다." in _sp, True)
+
+    # 강제되는 스코프(완료 정의·입출력)가 뒤에 남아야 한다 — 순서는 조용히 뒤집힌다.
+    # `find` 로 위치를 먼저 뽑는다: 마커가 빠지는 회귀에서 `index` 는 ValueError 로 터져
+    # **뒤의 검사와 결과 요약이 통째로 안 돈다** — 게이트가 조용해지는 그 모양이다.
+    _i = _sp.find("PROJ_MEM_TEST")
+    check("순서: 프로젝트 지침 < 완료 정의 · 입출력",
+          [s for s in ("# 완료 정의", "# 이 단계의 입출력")
+           if s in _sp and _sp.index(s) < _i], [])
+    check("순서: 하네스 공통 지침이 맨 앞", _sp.find("# 하네스 공통 지침"), 0)
+
+    # CLI 가 발견하는 범위를 그대로 덮어야 한다 [M: probe/results/memory-files.md].
+    # 좁으면 "적어 뒀는데 안 실린" 상태가 소리 없이 생긴다.
+    (_p / "CLAUDE.local.md").write_text("로컬 마커 LOCAL_MEM_TEST.\n", encoding="utf-8")
+    (_p / "imported.md").write_text("가져온 마커 IMPORTED_MEM_TEST.\n", encoding="utf-8")
+    (_p / "CLAUDE.md").write_text(
+        "마커 PROJ_MEM_TEST 를 지킨다.\n\n@imported.md\n\n@없는파일.md 는 그대로 둔다.\n",
+        encoding="utf-8")
+    _mem = build.project_memory(_p)
+    check("CLAUDE.local.md 도 편입된다", "LOCAL_MEM_TEST" in _mem, True)
+    check("@경로 import 가 펴진다", "IMPORTED_MEM_TEST" in _mem, True)
+    check("풀리지 않는 @ 는 건드리지 않는다", "@없는파일.md" in _mem, True)
+
+    # 산문 안에서는 `@경로` 뒤에 문장부호가 붙는다. 마침표까지 경로로 잡으면 조용히 안 펴진다.
+    (_p / "CLAUDE.md").write_text("자세한 것은 @imported.md. 끝.\n", encoding="utf-8")
+    _mem = build.project_memory(_p)
+    check("문장 끝 마침표가 붙어도 펴진다", "IMPORTED_MEM_TEST" in _mem, True)
+    check("벗겨 낸 마침표는 돌려준다", "IMPORTED_MEM_TEST." in _mem, True)
+
+    # 순환 참조. 깊이 상한만으로는 같은 본문이 5번 복제된다.
+    (_p / "a.md").write_text("본문 CYCLE_MEM_TEST.\n\n@b.md\n", encoding="utf-8")
+    (_p / "b.md").write_text("@a.md\n", encoding="utf-8")
+    (_p / "CLAUDE.md").write_text("@a.md\n", encoding="utf-8")
+    check("순환 import -> 본문은 한 번만", build.project_memory(_p).count("CYCLE_MEM_TEST"), 1)
+
+    # UTF-8 이 아닌 파일 하나로 기동 전체가 죽으면 안 된다 — 편입은 부가, 기동이 본체다.
+    # 못 읽은 것만 빠지고 나머지는 남아야 한다 (stderr 경고는 눈으로 확인).
+    (_p / "CLAUDE.md").write_bytes("마커 CP949_MEM_TEST".encode("cp949"))
+    _mem = build.project_memory(_p)
+    check("디코딩 실패 -> 예외가 아니라 제외", "CP949_MEM_TEST" in _mem, False)
+    check("디코딩 실패해도 나머지는 남는다", "LOCAL_MEM_TEST" in _mem, True)
+
+check("골든 프로젝트에는 편입할 것이 없다 (golden 이 머신 독립을 유지한다)",
+      build.project_memory(Path("/__golden__")), None)
+
+# bootstrap 이 `~/.claude/CLAUDE.md` 로 까는 기본 지침. 파일명을 바꾸면 bootstrap 은
+# **다음 새 머신 세팅 도중에야** 터진다 — 고치기 가장 나쁜 순간이다.
+_bootstrap = (ROOT / "bootstrap.sh").read_text(encoding="utf-8")
+check("bootstrap 이 참조하는 전역 지침 파일이 실재한다",
+      (ROOT / "core" / "GLOBAL_CLAUDE.md").is_file(), True)
+check("bootstrap 이 그 파일을 `jig lang` 으로 깐다", '"$JIG" lang' in _bootstrap, True)
+
+# 문자열 매칭만으로는 부족했다 — bootstrap 이 부르는 형태가 **설치를 하지 않는** 경로였는데
+# `'"$JIG" lang' in _bootstrap` 은 초록불이었다. 그래서 bootstrap 이 실제로 넘기는 인자로
+# 돌려 **파일이 생기는지** 본다. 설치 대상만 임시 경로로 바꿔치기한다.
+_real_dst = cli.GLOBAL_DST
+with tempfile.TemporaryDirectory() as _d:
+    cli.GLOBAL_DST = Path(_d) / ".claude" / "CLAUDE.md"
+    try:
+        _argv = re.search(r'"\$JIG" lang "\$@"', _bootstrap)
+        check("bootstrap 이 인자를 그대로 넘긴다", bool(_argv), True)
+        check("bootstrap 의 기본 인자가 --install 이다", "--install" in _bootstrap, True)
+
+        cli.cmd_lang([])                       # 조회는 아무것도 쓰지 않는다
+        check("jig lang (무인자) -> 쓰지 않는다", cli.GLOBAL_DST.exists(), False)
+
+        cli.cmd_lang(["--install"])            # bootstrap 의 기본 경로
+        check("jig lang --install -> 깔린다", cli.GLOBAL_DST.is_file(), True)
+        check("깔린 내용이 템플릿과 같다",
+              cli.GLOBAL_DST.read_text(encoding="utf-8"),
+              (ROOT / "core" / "GLOBAL_CLAUDE.md").read_text(encoding="utf-8"))
+
+        # 사람이 쓴 파일을 덮기 전에 **한 번은** 남긴다. tar 백업은 reset 경로에만 있다.
+        cli.GLOBAL_DST.write_text("사람이 쓴 전역 지침 HANDWRITTEN\n", encoding="utf-8")
+        cli.cmd_lang(["--install"])
+        _bak = cli.GLOBAL_DST.with_suffix(".md.jigkit-backup")
+        check("덮기 전에 백업이 남는다", "HANDWRITTEN" in _bak.read_text(encoding="utf-8"), True)
+        cli.cmd_lang(["--install"])
+        check("백업은 갱신하지 않는다 (사람이 쓴 것이 지켜져야 한다)",
+              "HANDWRITTEN" in _bak.read_text(encoding="utf-8"), True)
+    finally:
+        cli.GLOBAL_DST = _real_dst
+
+# `jig lang` 은 그 파일의 마커 블록만 갈아 끼운다. 마커가 없어지면 LookupError 인데,
+# 그 시점은 사람이 언어를 바꾸려는 순간이다 — 여기서 미리 잡는다.
+import mdblock  # noqa: E402
+
+_global = (ROOT / "core" / "GLOBAL_CLAUDE.md").read_text(encoding="utf-8")
+check("전역 지침에 언어 마커가 산다",
+      [m for m in cli.LANG_MARKERS if m not in _global.splitlines()], [])
+check("현재 언어를 블록에서 되읽는다", bool(cli.current_lang()), True)
+
+_swapped = mdblock.splice(_global, *cli.LANG_MARKERS, cli._lang_body("English"))
+check("언어 교체 -> 새 언어가 들어온다",
+      "Respond in English for every command" in _swapped, True)
+check("언어 교체 -> 나머지 지침은 그대로",
+      _swapped.count("Karpathy"), _global.count("Karpathy"))
+
 # ---------------------------------------------------------------- 결과
 
 if _failures:

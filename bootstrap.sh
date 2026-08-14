@@ -23,14 +23,16 @@ JIG="$ROOT/bin/jig"
 
 DO_SYNC=1
 DO_PATH=0
+LANG_SET=""
 
 usage() {
   cat <<'USAGE'
 사용법: ./bootstrap.sh [옵션]
 
-  (없음)      프리플라이트 -> jig sync -> jig doctor -> PATH 안내
+  (없음)      프리플라이트 -> 전역 지침 -> jig sync -> jig doctor -> PATH 안내
   --no-sync   네트워크를 타지 않는다 (프리플라이트 + doctor 만)
   --path      셸 rc 에 PATH export 를 추가한다 (멱등)
+  --lang L    전역 지침의 응답 언어를 L 로 (기본: 지금 값 유지). 나중에는 jig lang
   -h, --help  이 도움말
 
 여러 번 실행해도 안전하다.
@@ -41,6 +43,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --no-sync) DO_SYNC=0 ;;
     --path)    DO_PATH=1 ;;
+    --lang)    shift; [ $# -gt 0 ] || { echo "--lang 에 언어가 필요하다 (예: --lang English)" >&2; exit 1; }; LANG_SET="$1" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "모르는 옵션: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -91,6 +94,36 @@ if [ "$missing" -ne 0 ]; then
   echo "  위 항목을 채우고 다시 실행한다." >&2
   exit 1
 fi
+
+# ---------------------------------------------------------------- 전역 지침
+# `~/.claude/CLAUDE.md` 는 모든 세션에 실린다 — 프로필 세션도 그렇다는 것을 쟀다
+# (probe/results/memory-files.md). 기본 지침을 여기에 깔아 새 머신이 빈손으로
+# 시작하지 않게 한다.
+#
+# **덮어쓴다.** 이 스크립트는 "다 밀고 처음부터" 를 전제로 하고, 그래야 여러 번 돌려도
+# 같은 상태가 된다. 손으로 고친 내용이 있으면 여기서 사라진다 —
+# reset-and-setup.sh 로 왔다면 그 전에 tar 백업이 남는다.
+#
+# 설치는 `jig lang` 한 곳에서만 한다. 여기서 따로 `cp` 하면 규칙이 두 벌이 되고,
+# 언젠가 한쪽만 고쳐진다. 인자 없이 부르면 언어를 그대로 두고 설치만 한다.
+if [ -n "$LANG_SET" ]; then set -- "$LANG_SET"; else set -- --install; fi
+if ! global_out="$("$JIG" lang "$@" 2>&1)"; then
+  fail global "전역 지침을 깔지 못했다"
+  echo "$global_out" >&2
+  exit 1
+fi
+# **결과를 확인한다.** 종료 코드만 보면, 설치 대신 현재 언어만 출력하고 끝나는 경로가
+# `ok` 로 찍힌다 — 실제로 그렇게 한 번 났다. 안 깔린 것이 성공으로 보이는 게 최악이다.
+global_line="$(echo "$global_out" | grep '^installed ' | tail -1 || true)"
+if [ -z "$global_line" ]; then
+  fail global "설치 결과를 확인하지 못했다"
+  echo "$global_out" >&2
+  exit 1
+fi
+ok global "${global_line#installed }"
+# `[ ... ] && ok ...` 로 쓰면 안 된다 — 조건이 거짓일 때 목록 전체가 1 로 끝나고
+# `set -e` 가 여기서 부트스트랩을 죽인다.
+if [ -n "$LANG_SET" ]; then ok language "$LANG_SET"; fi
 
 # ---------------------------------------------------------------- 캐시
 if [ "$DO_SYNC" -eq 1 ]; then

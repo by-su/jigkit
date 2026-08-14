@@ -28,7 +28,12 @@ exec "$SHELL" -l          # pick up the new PATH
 - Without `--path` it only *prints* the `export PATH=...` line for you to add yourself.
 - `--no-sync` skips the network. **Do not use it on a fresh machine** — without the skill
   cache the verification step fails.
-- Running it again is safe and does nothing new.
+- It writes `~/.claude/CLAUDE.md` from `core/GLOBAL_CLAUDE.md` — the default global
+  instructions every session loads. **Overwritten, not merged**: move hand-written
+  global instructions out of the way first.
+- `--lang English` sets the response language while it does that. Change it later with
+  `jig lang English`; `jig lang` alone prints the current one.
+- Running it again is safe and lands on the same state.
 
 Confirm it worked:
 

@@ -66,9 +66,41 @@ cd jigkit
 ```
 
 Clone it anywhere. `bootstrap.sh` derives its own location, so no path is hardcoded.
-It checks for Claude Code, `python3`, PyYAML and `git`; fetches the registered skill
-sources into `library/cache/`; and runs `jig doctor` to confirm the result actually
-works. Running it again is safe and does nothing new.
+It checks for Claude Code, `python3`, PyYAML and `git`; installs the default global
+instructions; fetches the registered skill sources into `library/cache/`; and runs
+`jig doctor` to confirm the result actually works. Running it again is safe and lands
+on the same state.
+
+That default lands in `~/.claude/CLAUDE.md`, copied from
+[`core/GLOBAL_CLAUDE.md`](core/GLOBAL_CLAUDE.md) — the Karpathy behavioural
+guidelines plus a response-language rule. Every session loads that file, profile
+sessions included (measured:
+[`probe/results/memory-files.md`](probe/results/memory-files.md)), so a fresh machine
+does not start empty-handed. **It is overwritten, not merged.** The script exists to
+produce one known state, and `reset-and-setup.sh` wipes `~/.claude` on the way in
+anyway — but if you have hand-written global instructions on this machine, move them
+first.
+
+The language is set at setup time or changed later, and both write the same file:
+
+```bash
+./bootstrap.sh --lang English    # at setup (reset-and-setup.sh takes it too)
+jig lang English                 # later — rewrites and reinstalls
+jig lang                         # what is it now? writes nothing
+jig lang --install               # reinstall without changing the language
+```
+
+`jig lang` edits the template in the repository, then reinstalls it. Editing only the
+installed copy would look like it worked and then be silently reverted by the next
+bootstrap, so the repository stays the single source.
+
+The bare form is a query and writes nothing; `--install` is what `bootstrap.sh` calls
+when you don't pass `--lang`. Those were one command at first — the no-argument call
+both reported and installed — and the result was that bootstrap's default path printed
+`ok global` while installing nothing at all. Before overwriting an existing
+`~/.claude/CLAUDE.md` the first time, the previous contents are kept beside it as
+`CLAUDE.md.jigkit-backup`; later runs leave that backup alone, because the copy worth
+keeping is the one a person wrote.
 
 It **prints** the `PATH` line rather than editing your shell config. Pass `--path` to
 have it appended for you, or `--no-sync` to skip the network.
@@ -107,6 +139,7 @@ jig growth 0 10 25 50                      # measure the cost curve for N skills
 jig golden [--update]                      # regression-test the compiler
 jig argv <profile>                         # print the launch argv without running it
 jig new <name>                             # scaffold a profile
+jig lang [language]                        # set the response language in the global instructions
 
 # skill sources
 jig source add <url> [--as N]              # register a skill repository (link + SHA only)
@@ -145,6 +178,30 @@ Skills, subagents and MCP definitions live once in `library/` and are
 referenced by id, so several profiles can share one without copies or symlinks.
 `jig build` resolves all of it into `build/claude/<name>/` — a real Claude Code
 plugin plus its settings, MCP config and system prompt.
+
+The system prompt carries the project's own `CLAUDE.md` too. Not for tidiness:
+profile sessions launch with `--setting-sources user`, and that flag turns off
+project `CLAUDE.md` auto-discovery along with project settings — measured, and
+documented nowhere ([`probe/results/memory-files.md`](probe/results/memory-files.md)).
+Passing `user,project` instead would bring back the project's hooks and
+permission overrides, which is the reason the flag is there. So the compiler
+takes the *content* at build time and leaves the wiring excluded. The user's
+global `~/.claude/CLAUDE.md` is loaded by the CLI in every case, so a session
+gets both.
+
+Matching the CLI's own discovery scope is the whole job here, because anything
+narrower fails silently — you write the instruction, and it is simply not
+there. Measured, the CLI loads `CLAUDE.md`, `CLAUDE.local.md` and any `@path`
+imports inside them; the compiler follows all three. It deliberately stops at
+the project root: `project` is the boundary you named, so a parent directory's
+`CLAUDE.md` is out of scope. A file that will not decode as UTF-8 is dropped
+with a warning on stderr rather than taking the launch down with it.
+
+The cost is worth stating plainly: project text now enters the session through
+the *system prompt*, the highest-trust channel there is. Permissions still
+hold — the deny rules are the profile's, not the project's — but instructions
+in a cloned repository's `CLAUDE.md` are read as instructions. Don't launch a
+profile inside a repository you don't trust.
 
 A profile is defined by **what it reads, what it writes, and what it may not
 touch** — not by a persona. See
@@ -554,9 +611,10 @@ CHANGELOG.md           human-facing history — agents read the current-state do
 docs/PRINCIPLES.md     principles, sources, and what enforces each one
 docs/QUICK_START.md    install to first session, copy-pasteable
 docs/ko/               translations — docs/<lang>/X.md mirrors the canonical X.md
-bootstrap.sh           first-run setup: dependencies, cache, verification
+bootstrap.sh           first-run setup: dependencies, global defaults, cache, verification
 reset-and-setup.sh     reset Claude Code to a clean state, then bootstrap (standalone)
 core/                  always loaded: PREAMBLE.md and the /profile skill
+core/GLOBAL_CLAUDE.md  default ~/.claude/CLAUDE.md, installed by bootstrap
 library/sources.yaml   registered skill repositories — links and pinned SHAs
 library/cache/<ns>/    fetched repository contents (gitignored, disposable)
 library/               local skills, agents and MCP definitions, one copy each

@@ -47,6 +47,7 @@ usage() {
   --keep-history  대화 기록·메모리는 남긴다 (projects/, history.jsonl, sessions/, plans/ ...)
   --no-bootstrap  초기화만 하고 jigkit 세팅은 하지 않는다
   --path          bootstrap 에 --path 를 넘긴다 (셸 rc 에 PATH 추가 — 새 컴퓨터면 권장)
+  --lang L        전역 지침의 응답 언어를 L 로 세팅한다 (예: --lang English)
   --clone-to DIR  jigkit 을 여기에 clone 한다 (기본 ~/jigkit, 옆에 클론이 있으면 그걸 쓴다)
   --repo URL      clone 할 저장소 (기본 by-su/jigkit)
   --restore FILE  백업 tar 로 되돌린다 (다른 작업은 하지 않는다)
@@ -65,6 +66,7 @@ while [ $# -gt 0 ]; do
     --no-bootstrap) DO_BOOTSTRAP=0 ;;
     --path)         BOOTSTRAP_ARGS+=(--path) ;;
     --no-sync)      BOOTSTRAP_ARGS+=(--no-sync) ;;
+    --lang)         shift; [ $# -gt 0 ] || { echo "--lang 에 언어가 필요하다" >&2; exit 1; }; BOOTSTRAP_ARGS+=(--lang "$1") ;;
     --clone-to)     shift; [ $# -gt 0 ] || { echo "--clone-to 에 경로가 필요하다" >&2; exit 1; }; CLONE_TO="$1" ;;
     --repo)         shift; [ $# -gt 0 ] || { echo "--repo 에 URL 이 필요하다" >&2; exit 1; }; REPO_URL="$1" ;;
     --restore)      shift; [ $# -gt 0 ] || { echo "--restore 에 파일이 필요하다" >&2; exit 1; }; RESTORE="$1" ;;

@@ -19,9 +19,28 @@
 
 ### Added
 
+- **전역 기본 지침**: `bootstrap.sh` 가 `core/GLOBAL_CLAUDE.md` (Karpathy 행동 지침 +
+  응답 언어)를 `~/.claude/CLAUDE.md` 로 깐다. 모든 세션이 싣는 자리라 새 머신이 빈손으로
+  시작하지 않는다. **병합이 아니라 덮어쓴다** (`bootstrap.sh`, `core/GLOBAL_CLAUDE.md`)
+
+- **`jig lang [언어]`**: 전역 지침의 응답 언어를 바꾸고 다시 깐다. 인자가 없으면 현재
+  값만 보여주고 아무것도 쓰지 않으며, `--install` 은 언어를 두고 설치만 한다.
+  세팅 시점에 정하려면 `./bootstrap.sh --lang English` (`reset-and-setup.sh` 도 그대로
+  받는다). 기존 전역 파일은 처음 덮을 때 `CLAUDE.md.jigkit-backup` 으로 한 번 남는다
+  (`adapters/claude/cli.py`, `bootstrap.sh`)
+
 - **빠른 시작 문서 분리**: 설치부터 첫 세션·스킬 등록·스택 배치·단계 전환까지를 복사해
   실행할 수 있는 형태로 README 에서 떼어냈다. README 는 "왜 이런가" 를 맡는다
   (`docs/QUICK_START.md`)
+
+### Fixed
+
+- **프로필 세션이 프로젝트 `CLAUDE.md` 를 못 보던 것**: `--setting-sources user` 가
+  프로젝트 설정뿐 아니라 프로젝트 `CLAUDE.md` 자동 발견까지 끄고 있었다 (실측).
+  컴파일러가 그 내용을 시스템 프롬프트에 편입한다 — 이제 사용자 전역 지침과
+  프로젝트 지침이 함께 실린다. `CLAUDE.local.md` 와 `@경로` import 까지 CLI 와 같은
+  범위를 덮고, UTF-8 로 안 읽히는 파일은 기동을 죽이지 않고 경고와 함께 빠진다
+  (`adapters/claude/build.py`, `probe/results/memory-files.md`)
 
 ### Changed
 

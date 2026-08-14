@@ -52,6 +52,9 @@ COMMANDS = [
      "print the launch argv without running it", "기동 인자만 출력 (실행하지 않음)"),
     ("core", "new <name>", "new <이름>",
      "scaffold a profile", "템플릿에서 새 프로필 생성"),
+    ("core", "lang [language]", "lang [언어]",
+     "set the response language in the global instructions",
+     "전역 지침의 응답 언어를 바꾼다 (인자 없으면 현재 값)"),
     # skills
     ("skills", "source add <url> [--as N]", "source add <url> [--as N]",
      "register a skill repository (link + SHA only)", "오픈소스 스킬 저장소 등록 (링크 + SHA 만)"),

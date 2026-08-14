@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import sys
 from pathlib import Path, PurePosixPath
@@ -170,13 +171,121 @@ def build_mcp(profile: dict) -> dict:
     return {"mcpServers": servers}
 
 
-def build_system_prompt(profile: dict) -> str:
+def project_memory(project: Path) -> str | None:
+    """프로젝트 `CLAUDE.md` 를 시스템 프롬프트에 편입할 형태로 읽는다.
+
+    [M:CC-SETTING-SOURCES-GATES-MEMORY] `--setting-sources user` 는 settings 만
+    가르는 게 아니라 **프로젝트 `CLAUDE.md` 자동 발견까지 함께 끈다**
+    (probe/results/memory-files.md). 그래서 프로필 세션은 사용자 전역
+    `~/.claude/CLAUDE.md` 만 싣고 프로젝트 지침을 못 본 채 떴다.
+
+    `user,project` 로 되돌리는 것은 답이 아니다 — 프로젝트 `.claude/settings.json` 의
+    훅과 권한이 함께 돌아와 이중 발화와 권한 우회를 부른다. 그 배제가 애초에 이
+    플래그를 붙인 이유다. 그래서 **내용만** 컴파일 시점에 가져온다.
+
+    전역은 CLI 가 그대로 싣는다 — 여기서 편입하는 것은 프로젝트 쪽뿐이고,
+    세션에는 전역 + 프로젝트가 함께 올라간다.
+
+    **CLI 가 발견하는 것과 같은 범위를 덮어야 한다.** 좁으면 사용자는 적어 둔 지침이
+    실린 줄 알고, 실제로는 일부만 실린다 — 빠진 쪽이 소리를 내지 않는다.
+    실측한 CLI 동작 `[M]` (probe/results/memory-files.md):
+    `CLAUDE.md` · `CLAUDE.local.md` · 그 안의 `@경로` import 까지 전부 실린다.
+
+    덮지 **않는** 것: 프로젝트 위쪽 디렉터리의 `CLAUDE.md`. `project` 는 사용자가
+    직접 지정한 경계이므로 그 위는 이 하네스의 범위 밖으로 둔다.
+    """
+    chunks: list[str] = []
+    seen: set[Path] = set()
+    for name in ("CLAUDE.md", "CLAUDE.local.md"):
+        f = project / name
+        if not f.is_file():
+            continue
+        body = _read_memory(f)
+        if not body:
+            continue
+        seen.add(f.resolve())
+        chunks.append(f"## `{name}`\n\n{_expand_imports(body, f.parent, seen)}")
+    if not chunks:
+        return None
+    return ("# 프로젝트 지침\n\n이 프로젝트에서 일하는 동안 함께 지킨다.\n\n"
+            + "\n\n".join(chunks))
+
+
+def _read_memory(f: Path) -> str:
+    """읽히면 본문, 아니면 빈 문자열 — 그리고 **소리를 낸다.**
+
+    UTF-8 이 아닌 `CLAUDE.md` 하나로 `jig run`·`doctor`·`budget` 이 전부 못 뜨면
+    안 된다. 편입은 부가 기능이고 기동은 본체다. 다만 조용히 빼면 "지침을 적었는데
+    안 지킨다" 로 나타나므로, 뺐다는 사실은 stderr 로 알린다.
+    """
+    try:
+        return f.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"경고: {f} 를 읽지 못해 프로젝트 지침에서 뺐다 ({type(e).__name__}).",
+              file=sys.stderr)
+        return ""
+
+
+# `@경로` import. 파일로 풀리지 않는 것은 그대로 둔다 — 이메일·데커레이터가 걸리지
+# 않는 이유가 이것이고, 별도 제외 목록이 필요 없는 이유이기도 하다.
+_IMPORT = re.compile(r"(?<![\w`])@([~\w./-]+)")
+_IMPORT_DEPTH = 5
+
+
+def _candidates(raw: str) -> list[str]:
+    """`docs/style.md.` -> `docs/style.md.`, `docs/style.md` 순.
+
+    긴 것부터 본다 — 진짜로 `.` 로 끝나는 파일이 있으면 그쪽이 이긴다.
+    """
+    out = [raw]
+    while out[-1] and out[-1][-1] in ".,;:!?":
+        out.append(out[-1][:-1])
+    return [c for c in out if c]
+
+
+def _expand_imports(text: str, base: Path, seen: set[Path], depth: int = 0) -> str:
+    if depth >= _IMPORT_DEPTH:
+        return text
+
+    def one(m: re.Match) -> str:
+        raw = m.group(1)
+        # 산문 안의 `@docs/style.md.` 는 마침표까지 경로로 잡힌다 → `is_file()` 이 거짓 →
+        # **조용히 안 펴진다.** 이 함수가 막으려던 그 실패 모양이라, 뒤에서부터 벗겨 본다.
+        for cand in _candidates(raw):
+            p = Path(cand).expanduser() if cand.startswith("~") else base / cand
+            try:
+                p = p.resolve()
+            except OSError:
+                continue
+            # 순환 참조는 여기서 멈춘다. 깊이 상한만으로는 A→B→A 가 5번 복제된다.
+            if p in seen:
+                return m.group(0)
+            if not p.is_file():
+                continue
+            seen.add(p)
+            body = _read_memory(p)
+            if not body:
+                return m.group(0)
+            expanded = _expand_imports(body, p.parent, seen, depth + 1)
+            # 벗겨 낸 문장부호는 돌려준다 — 본문의 문장이 상하면 안 된다.
+            return expanded + raw[len(cand):]
+        return m.group(0)
+
+    return _IMPORT.sub(one, text)
+
+
+def build_system_prompt(profile: dict, project: Path) -> str:
     parts = [(HARNESS / "core" / "PREAMBLE.md").read_text(encoding="utf-8")]
 
     brief = HARNESS / "profiles" / profile["name"] / "BRIEF.md"
     if not brief.is_file():
         raise BuildError(f"{brief} 이 없다.")
     parts.append(brief.read_text(encoding="utf-8"))
+
+    # 프로젝트 지침은 단계 지침 뒤, 완료 정의 앞에 온다 —
+    # 강제되는 스코프(완료 정의·입출력)가 마지막에 남아야 한다.
+    if memory := project_memory(project):
+        parts.append(memory)
 
     if done := profile.get("done_when") or []:
         lines = ["# 완료 정의", "", "아래를 전부 만족해야 이 프로필의 작업이 끝난 것이다.", ""]
@@ -337,7 +446,7 @@ def compile_profile(name: str, project: Path) -> dict:
                    json.dumps(build_settings(profile, project), indent=2, ensure_ascii=False) + "\n")
     write_readback(out / "mcp.json",
                    json.dumps(build_mcp(profile), indent=2, ensure_ascii=False) + "\n")
-    write_readback(out / "system-prompt.md", build_system_prompt(profile))
+    write_readback(out / "system-prompt.md", build_system_prompt(profile, project))
 
     return {"profile": profile, "out": out, "skills": skills}
 
