@@ -28,6 +28,11 @@
   짚는다 (`adapters/claude/build.py`, `adapters/claude/stack_apply.py`,
   `library/mcp/README.md`)
 
+- **MCP 목록 확장**: `docker-mcp`(ckreiling/mcp-server-docker) 와
+  `semgrep-mcp`(바이너리 내장 `semgrep mcp`) 를 추가했다. 기존 `docker`(설치만) ·
+  `semgrep`(커밋 게이트) 은 그대로 기본값이고, MCP 판은 골라 켜는 쪽이다
+  (`library/stacks/common.yaml`)
+
 - **전역 기본 지침**: `bootstrap.sh` 가 `core/GLOBAL_CLAUDE.md` (Karpathy 행동 지침 +
   응답 언어)를 `~/.claude/CLAUDE.md` 로 깐다. 모든 세션이 싣는 자리라 새 머신이 빈손으로
   시작하지 않는다. **병합이 아니라 덮어쓴다** (`bootstrap.sh`, `core/GLOBAL_CLAUDE.md`)
@@ -43,6 +48,15 @@
   (`docs/QUICK_START.md`)
 
 ### Fixed
+
+- **Vitest MCP 를 지웠다**: `@vitest/mcp` 는 npm 에 없다 (실측 — vitest-community/mcp 는
+  소스만 있고 아무것도 배포하지 않았다). 켜면 기동에 실패하던 정의라 뺐다. 러너는
+  그대로다 — 설치·설정 템플릿·`pnpm vitest run` 은 그대로고 없던 MCP 표면만
+  목록에서 빠진다 (`library/stacks/typescript.yaml`)
+
+- **PostHog MCP 정의가 기동할 수 없던 것**: `@posthog/mcp-server` 는 npm 에 존재하지
+  않는다 (실측). 공식 설정인 `mcp-remote` + `https://mcp.posthog.com/mcp` 로 바꾸고,
+  개인 API 키를 환경변수로 받도록 했다 (`library/stacks/common.yaml`)
 
 - **프로필 세션이 프로젝트 `CLAUDE.md` 를 못 보던 것**: `--setting-sources user` 가
   프로젝트 설정뿐 아니라 프로젝트 `CLAUDE.md` 자동 발견까지 끄고 있었다 (실측).

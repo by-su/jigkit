@@ -47,6 +47,16 @@
 - 확인: `probe/session-start/run.sh` 의 settings 에서 matcher 만 바꿔 재실행.
 - 등록: 2026-08-13
 
+## Logfire MCP 서버의 실행 인자
+
+- 왜: `python.yaml` 의 `logfire` 항목이 `why` 에서 `[?]` 로 이 파일을 가리키는데
+  등록된 적이 없다 — 가리키는 곳이 비어 있으면 `[?]` 가 그냥 사라진 것과 같다.
+- 확인: pydantic/logfire-mcp 의 README 에서 설정 JSON 을 읽고, 그 패키지가 실제로
+  배포돼 있는지 `curl -s -o /dev/null -w '%{http_code}' https://registry.npmjs.org/<이름>`
+  로 대조한다. 없으면 항목을 `surface: library` 로 내린다 — 없는 표면을 있다고 적어
+  두면 켰을 때 기동에 실패한다 (vitest 가 그랬다).
+- 등록: 2026-08-14
+
 ## --agent <name> 이 --plugin-dir 로 들어온 에이전트를 이름으로 잡는가
 
 - 왜: 프로필 기동 시 서브에이전트를 지정 기동할 수 있으면 agents 항목의 쓸모가 커진다.

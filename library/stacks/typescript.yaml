@@ -22,12 +22,11 @@ base:
 
   - id: vitest
     role: test
-    surface: mcp
+    surface: library
     install: "pnpm add -D vitest"
     detect: { dep: vitest }
     template: vitest
-    mcp: { command: npx, args: ["-y", "@vitest/mcp@latest"] }
-    why: "vitest-community/mcp 가 공식 구현이라고 밝힌다 [D-3rd]. 패키지 이름 미확인 [?] (probe/PENDING.md)"
+    why: "템플릿이 vitest.config.ts 와 스모크 테스트 하나를 깔고 verify 가 `pnpm vitest run` 을 돈다. 공식 MCP 없음 — vitest-community/mcp 는 소스만 있고 npm 에 배포된 것이 없다 [M] (2026-08-14)"
 
   - id: typescript
     role: types
@@ -88,7 +87,7 @@ optional:
         init: "pnpm prisma init"
         detect: { dep: prisma }
         mcp: { command: npx, args: ["-y", "prisma", "mcp"] }
-        why: "공식 로컬 MCP(마이그레이션)와 원격 MCP(mcp.prisma.io) 둘 다 있다 [D]. 로컬 실행 인자 미확인 [?]"
+        why: "`npx -y prisma mcp` 가 공식 로컬 설정이다 [D] — 마이그레이션·스키마를 에이전트가 직접 돌린다. 원격판(`npx -y mcp-remote https://mcp.prisma.io/mcp`)은 Prisma Postgres 관리용이라 성격이 다르다 [D]"
       - id: prisma-format
         role: lint
         surface: hook
@@ -112,7 +111,7 @@ optional:
         surface: mcp
         detect: { mcp: mobile-mcp }
         mcp: { command: npx, args: ["-y", "@mobilenext/mobile-mcp@latest"] }
-        why: "시뮬레이터·실기기 화면을 읽고 탭·입력한다 [D]. 패키지 이름 미확인 [?]"
+        why: "시뮬레이터·실기기 화면을 읽고 탭·입력한다 — 웹의 playwright-mcp 에 대응하는 모바일판 [D]. @mobilenext/mobile-mcp 는 npm 에 있다 [M]"
 
   maestro:
     items:
@@ -148,7 +147,7 @@ optional:
         init: "npx shadcn@latest init --base base --defaults"
         detect: { file: components.json }
         mcp: { command: npx, args: ["shadcn@latest", "mcp"] }
-        why: "CLI 에 MCP 가 공식 내장 — 레지스트리 검색·설치를 에이전트가 직접 한다 [D]. `--base` 없이 돌리면 컴포넌트 라이브러리 선택 프롬프트에서 멈춘다 [M] (probe/results/stack-scaffold.md)"
+        why: "CLI 에 MCP 가 공식 내장 — `npx shadcn@latest mcp` 로 레지스트리 검색·설치를 에이전트가 직접 한다 [D]. 같은 리포가 에이전트 스킬(`shadcn-ui/shadcn`, `shadcn-ui/migrate-radix-to-base`)도 출하하며 그쪽은 library/sources.yaml 로 붙는다 [M]. `--base` 없이 돌리면 컴포넌트 라이브러리 선택 프롬프트에서 멈춘다 [M] (probe/results/stack-scaffold.md)"
 
   playwright:
     verify: ["pnpm playwright --version"]
@@ -165,7 +164,7 @@ optional:
         surface: mcp
         detect: { mcp: playwright-mcp }
         mcp: { command: npx, args: ["@playwright/mcp@latest"] }
-        why: "탐색·수동 QA 재현용. 시각적 회귀는 여기가 아니라 toHaveScreenshot 으로 CI 에서 [J]"
+        why: "접근성 트리로 페이지를 읽고 클릭·입력한다. @playwright/mcp 는 npm 에 있다 [M]. 탐색·수동 QA 재현용이고, 시각적 회귀는 여기가 아니라 toHaveScreenshot 으로 CI 에서 [J]"
 
   testcontainers:
     items:

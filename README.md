@@ -331,6 +331,12 @@ What matters about a tool is **how an agent gets hold of it**:
 still open upstream `[M]` — and that is a signal, not neglect: their CLI is already
 deterministic, so a hook beats a tool the model has to decide to call.
 
+When one tool has two surfaces it gets **two ids**: `docker` is `library` because Bash
+already wins at building and reading logs, and `docker-mcp` sits beside it for the rare
+job that polls container state; `semgrep` is a `gate` because blocking a commit is the
+point, and `semgrep-mcp` exists for when the agent has to read findings and fix them.
+The default and the opt-in are both recorded, each with its own reasoning.
+
 Every `surface: mcp` entry is enableable from a profile by id alone — the catalogue is
 the definition. `library/mcp/<id>.json` overrides it, which is where a secret goes,
 since the catalogue is committed and only carries `${VAR}` references.

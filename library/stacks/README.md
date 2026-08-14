@@ -27,6 +27,11 @@ templates/<id>/   apply 가 복사하는 설정 파일. 이미 있으면 덮지 
 `library` 를 "빠진 것"으로 읽지 않는다. Biome·Ruff 에 공식 MCP 가 없는 것은 방치가 아니라
 CLI 가 이미 결정론적이라는 신호이고, 그래서 훅으로 간다.
 
+한 도구가 표면을 둘 가지면 **id 를 둘로 쪼갠다** — `storybook`(library)/`storybook-mcp`(mcp),
+`playwright-agents`(agents)/`playwright-mcp`(mcp), `docker`(library)/`docker-mcp`(mcp),
+`semgrep`(gate)/`semgrep-mcp`(mcp). 하나가 기본이고 다른 하나는 골라 켜는 것이라는 판단도
+각자의 `why` 에 산다.
+
 `surface: mcp` 항목은 프로필의 `mcp:` 에 id 만 적으면 켜진다 — `library/mcp/` 에 파일이
 없어도 된다. 그 디렉터리는 override 다(`library/mcp/README.md`).
 
@@ -117,10 +122,12 @@ verify: [...]                  # 조합 전체의 마지막 검사
 
 | 키 | 기능 | 도구 | 표면 | 근거 |
 |---|---|---|---|---|
-| `docker` | container | `docker` | library | 로컬 빌드·로그는 Bash 가 이긴다 — MCP 를 붙이면 도구 정의만 컨텍스트를 먹는다 [J]. 공식 docker/mcp-gateway 는 성격이 다른 물건(MCP 서버들을 컨테이너로 격리 실행하는 게이트웨이)이다 [D] |
+| `docker` | container | `docker` | library | 로컬 빌드·로그는 Bash 가 이긴다 — 이미 결정론적이고 에이전트가 출력을 그대로 읽는다 [J]. 공식 docker/mcp-gateway 는 성격이 다른 물건(MCP 서버들을 컨테이너로 격리 실행하는 게이트웨이)이다 [D] |
+| `docker` | container | `docker-mcp` | mcp | ckreiling/mcp-server-docker. pypi 에 있고 리포는 살아 있다 [M]. 기본은 여전히 docker 항목대로 Bash 다 — 컨테이너 상태를 반복 조회하는 작업에서만 프로필에 켠다 [J] |
 | `figma` | design | `figma` | mcp | 디자인↔코드 양방향. 엔드포인트 미확인 [?] — 앱 커넥터로 붙는 경우가 많다 |
-| `posthog` | analytics | `posthog` | mcp | 공식. 리포는 PostHog/mcp (모노레포로 이동) [D] |
-| `semgrep` | security | `semgrep` | gate | semgrep/mcp 리포는 deprecated 이고 바이너리로 통합됐다 [D]. Claude Code 내장 /security-review 와 겹치므로 게이트 쪽만 쓴다 |
+| `posthog` | analytics | `posthog` | mcp | 원격 서버를 mcp-remote 로 감싸는 것이 공식 설정이다 [D] (PostHog/posthog services/mcp). 예전에 적혀 있던 @posthog/mcp-server 는 npm 에 없다 [M]. **켜기 전에 POSTHOG_PERSONAL_API_KEY 를 환경에 둔다** — 미설정이면 치환도 경고도 없이 리터럴이 헤더로 가서 401 이 인증 문제처럼 보인다 [M] (probe/results/mcp-env.md) |
+| `semgrep` | security | `semgrep` | gate | semgrep/mcp 리포는 archived [M]. MCP 는 바이너리로 통합됐다 [D]. Claude Code 내장 /security-review 와 겹치므로 기본은 게이트 쪽만 쓴다 — MCP 판이 필요하면 semgrep-mcp |
+| `semgrep` | security | `semgrep-mcp` | mcp | 같은 바이너리의 `semgrep mcp` 하위 명령 (stdio 기본) [D]. 게이트와 중복이므로 둘 다 켜지 않는다 — 커밋을 막는 것은 게이트, 에이전트가 스캔 결과를 읽고 고쳐야 할 때만 이쪽 [J]. SEMGREP_APP_TOKEN 은 플랫폼 연동에만 필요해 env 를 두지 않는다 |
 | `sentry` | observability | `sentry` | mcp | 행동 분석(PostHog)만 있으면 에러·트레이스가 빈다. 엔드포인트 미확인 [?] |
 
 
@@ -156,23 +163,23 @@ verify: [...]                  # 조합 전체의 마지막 검사
 | lint | `biome` | hook | 공식 MCP 없음 — RFC #6017 과 요청 이슈 #8705 가 열린 채 머지되지 않았다 [M]. 훅이 맞다 |
 | types | `typescript` | gate | 게이트는 하나만. 프레임워크가 자체 typecheck 를 갖는 경우 그쪽으로 바꾼다 |
 | types | `zod` | library | 스키마 하나로 런타임 검증과 정적 타입. 공식 MCP 없음 — llms.txt / llms-full.txt 만 있다 [M] |
-| test | `vitest` | mcp | vitest-community/mcp 가 공식 구현이라고 밝힌다 [D-3rd]. 패키지 이름 미확인 [?] (probe/PENDING.md) |
+| test | `vitest` | library | 템플릿이 vitest.config.ts 와 스모크 테스트 하나를 깔고 verify 가 `pnpm vitest run` 을 돈다. 공식 MCP 없음 — vitest-community/mcp 는 소스만 있고 npm 에 배포된 것이 없다 [M] (2026-08-14) |
 
 **optional** — `--with` 나 프리셋으로 고른다
 
 | 키 | 기능 | 도구 | 표면 | 근거 |
 |---|---|---|---|---|
 | `expo` | mobile | `expo` | mcp | Expo 공식 원격 MCP — 문서·EAS 빌드·워크플로·TestFlight 크래시. Free 플랜 포함 [D] |
-| `expo` | mobile | `mobile-mcp` | mcp | 시뮬레이터·실기기 화면을 읽고 탭·입력한다 [D]. 패키지 이름 미확인 [?] |
+| `expo` | mobile | `mobile-mcp` | mcp | 시뮬레이터·실기기 화면을 읽고 탭·입력한다 — 웹의 playwright-mcp 에 대응하는 모바일판 [D]. @mobilenext/mobile-mcp 는 npm 에 있다 [M] |
 | `maestro` | e2e | `maestro` | mcp | 공식 MCP 가 Maestro CLI 에 포함돼 있다 [D]. 하위 명령 이름 미확인 [?] |
 | `nest` | framework | `nest` | library | 에이전트 표면은 `nest g` 스키매틱뿐이다 — @rekog/mcp-nest 는 반대 방향(NestJS 로 MCP 서버를 만드는 것) [D]. 린터 선택 인자가 없어 ESLint·Prettier 가 항상 깔리므로 strips 로 지운다. Jest 도 같이 오는데 그건 남긴다 — `*.spec.ts` 는 Jest(`pnpm test`), `*.test.ts` 는 Vitest 로 갈린다 [M] (probe/results/stack-scaffold.md) |
 | `next` | framework | `next` | library | create-next-app 이 프로젝트를 만든다. `--biome` 로 린터를 고르므로 ESLint 를 뒤에서 지울 필요가 없다 [M] (probe/results/stack-scaffold.md). `--yes` 가 없으면 대화형으로 멈춘다 |
 | `next` | framework | `next-devtools` | mcp | Next 16+ 의 내장 /_next/mcp 를 프록시해 런타임 에러·라우트·로그를 준다 [D] |
 | `playwright` | e2e | `playwright-agents` | agents | planner·generator·healer 서브에이전트 정의를 업스트림이 직접 출하한다 (v1.56) [D] — 이 목록에서 스킬에 가장 가까운 항목 |
-| `playwright` | e2e | `playwright-mcp` | mcp | 탐색·수동 QA 재현용. 시각적 회귀는 여기가 아니라 toHaveScreenshot 으로 CI 에서 [J] |
+| `playwright` | e2e | `playwright-mcp` | mcp | 접근성 트리로 페이지를 읽고 클릭·입력한다. @playwright/mcp 는 npm 에 있다 [M]. 탐색·수동 QA 재현용이고, 시각적 회귀는 여기가 아니라 toHaveScreenshot 으로 CI 에서 [J] |
 | `prisma` | lint | `prisma-format` | hook | Biome 이 .prisma 를 모르므로 같은 디스패처의 다른 분기로 들어간다 |
-| `prisma` | db | `prisma` | mcp | 공식 로컬 MCP(마이그레이션)와 원격 MCP(mcp.prisma.io) 둘 다 있다 [D]. 로컬 실행 인자 미확인 [?] |
-| `shadcn` | ui | `shadcn` | mcp | CLI 에 MCP 가 공식 내장 — 레지스트리 검색·설치를 에이전트가 직접 한다 [D]. `--base` 없이 돌리면 컴포넌트 라이브러리 선택 프롬프트에서 멈춘다 [M] (probe/results/stack-scaffold.md) |
+| `prisma` | db | `prisma` | mcp | `npx -y prisma mcp` 가 공식 로컬 설정이다 [D] — 마이그레이션·스키마를 에이전트가 직접 돌린다. 원격판(`npx -y mcp-remote https://mcp.prisma.io/mcp`)은 Prisma Postgres 관리용이라 성격이 다르다 [D] |
+| `shadcn` | ui | `shadcn` | mcp | CLI 에 MCP 가 공식 내장 — `npx shadcn@latest mcp` 로 레지스트리 검색·설치를 에이전트가 직접 한다 [D]. 같은 리포가 에이전트 스킬(`shadcn-ui/shadcn`, `shadcn-ui/migrate-radix-to-base`)도 출하하며 그쪽은 library/sources.yaml 로 붙는다 [M]. `--base` 없이 돌리면 컴포넌트 라이브러리 선택 프롬프트에서 멈춘다 [M] (probe/results/stack-scaffold.md) |
 | `storybook` | ui | `storybook` | library | 격리 샌드박스. 코어 자체는 에이전트 표면이 아니다 |
 | `storybook` | ui | `storybook-mcp` | mcp | 공식. dev 서버 안에서 돌고 @storybook/claude-code-plugin 도 함께 나온다 [D] |
 | `testcontainers` | test | `testcontainers-node` | library | 리포지토리 계층 통합 테스트. 에이전트 표면 없음 |

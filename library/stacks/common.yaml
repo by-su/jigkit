@@ -17,7 +17,13 @@ optional:
         install: "uvx semgrep --version"
         detect: { file: .semgrep.yml }
         gate: { run: "uvx semgrep --config auto --error" }
-        why: "semgrep/mcp 리포는 deprecated 이고 바이너리로 통합됐다 [D]. Claude Code 내장 /security-review 와 겹치므로 게이트 쪽만 쓴다"
+        why: "semgrep/mcp 리포는 archived [M]. MCP 는 바이너리로 통합됐다 [D]. Claude Code 내장 /security-review 와 겹치므로 기본은 게이트 쪽만 쓴다 — MCP 판이 필요하면 semgrep-mcp"
+      - id: semgrep-mcp
+        role: security
+        surface: mcp
+        detect: { mcp: semgrep-mcp }
+        mcp: { command: uvx, args: ["semgrep", "mcp"] }
+        why: "같은 바이너리의 `semgrep mcp` 하위 명령 (stdio 기본) [D]. 게이트와 중복이므로 둘 다 켜지 않는다 — 커밋을 막는 것은 게이트, 에이전트가 스캔 결과를 읽고 고쳐야 할 때만 이쪽 [J]. SEMGREP_APP_TOKEN 은 플랫폼 연동에만 필요해 env 를 두지 않는다"
 
   posthog:
     items:
@@ -25,8 +31,12 @@ optional:
         role: analytics
         surface: mcp
         detect: { mcp: posthog }
-        mcp: { command: npx, args: ["-y", "@posthog/mcp-server"] }
-        why: "공식. 리포는 PostHog/mcp (모노레포로 이동) [D]"
+        mcp:
+          command: npx
+          args: ["-y", "mcp-remote@latest", "https://mcp.posthog.com/mcp",
+                 "--header", "Authorization:${POSTHOG_AUTH_HEADER}"]
+          env: { POSTHOG_AUTH_HEADER: "Bearer ${POSTHOG_PERSONAL_API_KEY}" }
+        why: "원격 서버를 mcp-remote 로 감싸는 것이 공식 설정이다 [D] (PostHog/posthog services/mcp). 예전에 적혀 있던 @posthog/mcp-server 는 npm 에 없다 [M]. **켜기 전에 POSTHOG_PERSONAL_API_KEY 를 환경에 둔다** — 미설정이면 치환도 경고도 없이 리터럴이 헤더로 가서 401 이 인증 문제처럼 보인다 [M] (probe/results/mcp-env.md)"
 
   sentry:
     items:
@@ -52,7 +62,13 @@ optional:
         role: container
         surface: library
         detect: { file: Dockerfile }
-        why: "로컬 빌드·로그는 Bash 가 이긴다 — MCP 를 붙이면 도구 정의만 컨텍스트를 먹는다 [J]. 공식 docker/mcp-gateway 는 성격이 다른 물건(MCP 서버들을 컨테이너로 격리 실행하는 게이트웨이)이다 [D]"
+        why: "로컬 빌드·로그는 Bash 가 이긴다 — 이미 결정론적이고 에이전트가 출력을 그대로 읽는다 [J]. 공식 docker/mcp-gateway 는 성격이 다른 물건(MCP 서버들을 컨테이너로 격리 실행하는 게이트웨이)이다 [D]"
+      - id: docker-mcp
+        role: container
+        surface: mcp
+        detect: { mcp: docker-mcp }
+        mcp: { command: uvx, args: ["mcp-server-docker"] }
+        why: "ckreiling/mcp-server-docker. pypi 에 있고 리포는 살아 있다 [M]. 기본은 여전히 docker 항목대로 Bash 다 — 컨테이너 상태를 반복 조회하는 작업에서만 프로필에 켠다 [J]"
 
 conflicts: []
 
