@@ -33,6 +33,12 @@
   `semgrep`(커밋 게이트) 은 그대로 기본값이고, MCP 판은 골라 켜는 쪽이다
   (`library/stacks/common.yaml`)
 
+- **NestJS 프로젝트의 러너가 Vitest 하나로**: `nest new` 가 깔고 가는 Jest 를 걷어낸다
+  (패키지 · `test/jest-e2e.json` · `package.json` 의 `jest` 키 · `scripts.test`).
+  `pnpm test` 가 `vitest run` 이 되고, `nest g` 가 앞으로 만들 spec 도 손 안 대고
+  그대로 돈다 — 러너 둘이 `pnpm test` 의 뜻을 갈라 놓던 것이 없어진다
+  (`library/stacks/typescript.yaml`, `library/stacks/templates/vitest/`)
+
 - **`pnpm` 과 `better-auth` 를 카탈로그에**: TypeScript 스택의 create·install·verify 가
   전부 pnpm 인데 정작 항목이 없어서, 카탈로그만 봐서는 무엇을 전제하는지 알 수 없었다.
   `better-auth` 는 `--with better-auth` 로 고른다 — 공식 원격 MCP(문서·예제·세팅 지원)가

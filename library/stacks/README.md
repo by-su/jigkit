@@ -108,8 +108,14 @@ verify: [...]                  # 조합 전체의 마지막 검사
   `biome check --write` 가 `import { AppService }` 를 `import type` 으로 바꿔서 **NestJS 의
   의존성 주입이 런타임에 깨진다** `[M]`. 타입 검사는 통과하고 테스트에서만 터진다
   (`probe/results/stack-scaffold.md`).
-- `vitest/vitest.config.ts` — `include` 를 `src/**`·`test/**` 의 `*.test.*` 로 좁힌다.
-  `*.spec.ts` 는 다른 러너 것이다 (Playwright 의 `seed.spec.ts`, Nest 의 Jest 스펙).
+- `vitest/vitest.config.ts` — 러너를 **접미사가 아니라 경로로** 가른다. Nest 의 spec 은
+  `src/` 밑, Playwright 의 것은 루트(`seed.spec.ts`)와 `specs/` 에 있어서, `src/**` 와
+  `test/**` 의 `*.test.*`·`*.spec.*`·`*.e2e-spec.*` 를 집으면 겹치지 않는다 `[M]`
+  (`probe/results/nest-vitest.md`). 그래서 Nest 프로젝트도 러너가 하나다.
+- `vitest/vitest-globals.d.ts` — `describe`/`it`/`expect` 의 전역 타입 한 줄.
+  Nest 스캐폴드에서 그 전역을 주던 것은 `@types/jest` 였고, 그것을 지우면 **테스트는
+  초록불인데 `tsc --noEmit` 만 깨진다** `[M]`. tsconfig 의 `types` 를 고치지 않는 이유는
+  tsconfig 가 스캐폴더마다 다르고 이미 존재해서다 — 템플릿은 없는 파일만 만든다.
 - `pytest/tests/test_smoke.py` · `vitest/src/smoke.test.ts` — 스모크 테스트 한 개.
   없으면 갓 만든 프로젝트에서 테스트 단계가 신호를 못 준다.
 
@@ -174,7 +180,7 @@ verify: [...]                  # 조합 전체의 마지막 검사
 | `expo` | mobile | `expo` | mcp | Expo 공식 원격 MCP — 문서·EAS 빌드·워크플로·TestFlight 크래시. Free 플랜 포함 [D] |
 | `expo` | mobile | `mobile-mcp` | mcp | 시뮬레이터·실기기 화면을 읽고 탭·입력한다 — 웹의 playwright-mcp 에 대응하는 모바일판 [D]. @mobilenext/mobile-mcp 는 npm 에 있다 [M] |
 | `maestro` | e2e | `maestro` | mcp | 공식 MCP 가 Maestro CLI 에 포함돼 있다 [D]. 하위 명령 이름 미확인 [?] |
-| `nest` | framework | `nest` | library | 에이전트 표면은 `nest g` 스키매틱뿐이다 — @rekog/mcp-nest 는 반대 방향(NestJS 로 MCP 서버를 만드는 것) [D]. 린터 선택 인자가 없어 ESLint·Prettier 가 항상 깔리므로 strips 로 지운다. Jest 도 같이 오는데 그건 남긴다 — `*.spec.ts` 는 Jest(`pnpm test`), `*.test.ts` 는 Vitest 로 갈린다 [M] (probe/results/stack-scaffold.md) |
+| `nest` | framework | `nest` | library | 에이전트 표면은 `nest g` 스키매틱뿐이다 — @rekog/mcp-nest 는 반대 방향(NestJS 로 MCP 서버를 만드는 것) [D]. 린터 선택 인자가 없어 ESLint·Prettier·Jest 가 항상 깔리므로 strips 로 지운다. **러너는 Vitest 하나다** — 스캐폴드 spec 도 `nest g` 가 앞으로 만들 spec 도 손 안 대고 그대로 돈다 [M] (probe/results/nest-vitest.md). 러너 둘은 `pnpm test` 의 뜻을 갈라 놓는다 |
 | `next` | framework | `next` | library | create-next-app 이 프로젝트를 만든다. `--biome` 로 린터를 고르므로 ESLint 를 뒤에서 지울 필요가 없다 [M] (probe/results/stack-scaffold.md). `--yes` 가 없으면 대화형으로 멈춘다 |
 | `next` | framework | `next-devtools` | mcp | Next 16+ 의 내장 /_next/mcp 를 프록시해 런타임 에러·라우트·로그를 준다 [D] |
 | `playwright` | e2e | `playwright-agents` | agents | planner·generator·healer 서브에이전트 정의를 업스트림이 직접 출하한다 (v1.56) [D] — 이 목록에서 스킬에 가장 가까운 항목 |
