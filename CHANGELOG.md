@@ -19,6 +19,15 @@
 
 ### Added
 
+- **빠른 시작 문서 분리**: 설치부터 첫 세션·스킬 등록·스택 배치·단계 전환까지를 복사해
+  실행할 수 있는 형태로 README 에서 떼어냈다. README 는 "왜 이런가" 를 맡는다
+  (`docs/QUICK_START.md`)
+
+### Changed
+
+- **문서를 `docs/` 로**: `PRINCIPLES.md` 와 번역이 루트를 떠났다. 정본은 `README.md` 와
+  `docs/*.md`, 번역은 `docs/<lang>/` — 언어가 늘어도 루트가 늘지 않는다
+  (`docs/PRINCIPLES.md`, `docs/ko/README.md`, `docs/ko/QUICK_START.md`)
 - **스택 카탈로그**: 언어·기능별로 어떤 도구를 **어떤 표면**(MCP · agents · 훅 · 게이트 ·
   설치만)으로 붙이는지를 `library/stacks/*.yaml` 한 곳에 두고, 카탈로그 문서와 배치 절차를
   거기서 생성한다 (`library/stacks/README.md`)

@@ -285,8 +285,10 @@ def repo_root(cwd: str) -> Path | None:
     if proc.returncode != 0:
         return None
     root = Path(proc.stdout.strip())
+    # 표식이 옮겨지면 게이트는 **조용히 꺼진다** — 저장소를 못 알아보고 통과시킨다.
+    # tests/test_gate.py 가 실제 체크아웃에서 이 함수가 루트를 찾는지 고정한다.
     marks = (root / "adapters" / "touched.py", root / "bin" / "jig",
-             root / "PRINCIPLES.md")
+             root / "docs" / "PRINCIPLES.md")
     return root if all(m.exists() for m in marks) else None
 
 
@@ -298,7 +300,7 @@ def _surface_message(items: list[tuple[str, str]]) -> str:
         "새 명령·플래그가 어떤 primary 문서에도 없다.\n\n"
         f"{listing}\n\n"
         "  명령이면: adapters/commands.py 의 표에 추가하고 `jig docs --update`, 결과를 stage 한다.\n"
-        "  플래그면: README.md · README.ko.md 산문에 서술을 추가하고 stage 한다.\n"
+        "  플래그면: README.md · docs/ko/README.md 산문에 서술을 추가하고 stage 한다.\n"
         "  사용자에게 보이는 변화면 CHANGELOG.md 의 Unreleased 에도 한 줄 남긴다.\n"
         f"  jig 표면이 아니라고 판단했으면:  {BYPASS}=1 git commit ...\n"
         "  (이 검사는 staged 문서 유무와 무관하다 — 표면은 문서에 존재해야 한다.)"

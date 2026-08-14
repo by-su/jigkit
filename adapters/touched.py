@@ -29,11 +29,13 @@ CODE_PATHS = ["adapters", "bin", "bootstrap.sh", "reset-and-setup.sh",
 
 # 갱신 대상인 문서. 여기 히트가 있는데 문서를 하나도 안 건드렸으면 게이트가 막는다.
 PRIMARY = [
-    "README.md", "README.ko.md", "PRINCIPLES.md", "CLAUDE.md",
+    "README.md", "CLAUDE.md",
     "core/PREAMBLE.md", "core/skills/profile/SKILL.md", "library/mcp/README.md",
     "library/stacks/README.md", "library/skills/stack/SKILL.md",
 ]
-PRIMARY_GLOBS = ["profiles/*/BRIEF.md"]
+# `docs/*.md` 는 정본 안내 문서, `docs/*/*.md` 는 그 번역(`docs/ko/README.md`).
+# 언어가 늘 때 여기를 고쳐야 한다면 언젠가 빠뜨린다 — 그래서 목록이 아니라 글롭이다.
+PRIMARY_GLOBS = ["profiles/*/BRIEF.md", "docs/*.md", "docs/*/*.md"]
 
 # 과거 실측 기록. 매번 최신화할 대상이 아니다 — 보여는 주되 게이트 판단에서는 뺀다.
 HISTORICAL_GLOBS = ["probe/results/*.md"]

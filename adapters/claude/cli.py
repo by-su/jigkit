@@ -439,7 +439,9 @@ def cmd_docs(rest: list[str]) -> None:
         for t in stale:
             print(f"FAIL {t}: 생성 블록이 낡았다. `jig docs --update`")
         raise SystemExit(1)
-    print("ok   생성 블록이 최신이다 (bin/jig · README.md · README.ko.md · library/stacks/README.md)")
+    # 대상 목록을 손으로 적으면 번역이 늘 때 문구만 옛말이 된다.
+    targets = " · ".join([*commands.TARGETS, "library/stacks/README.md"])
+    print(f"ok   생성 블록이 최신이다 ({targets})")
 
 
 def cmd_touched(rest: list[str]) -> None:

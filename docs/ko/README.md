@@ -1,6 +1,6 @@
 # jigkit
 
-> 정본은 [README.md](README.md) (영어). 이 문서는 한국어 번역이다.
+> 정본은 [README.md](../../README.md) (영어). 이 문서는 한국어 번역이다.
 
 **AI 코딩 에이전트용 프로필 하네스.** 작업 단계마다 로드되는 스킬·MCP·도구·권한을
 갈아끼워, 스킬 라이브러리가 커져도 세션이 무거워지지 않게 한다.
@@ -12,10 +12,24 @@
 Claude Code 기준으로 만들었다. 프로필 내용은 도구 중립이라 다른 CLI 어댑터를 붙일 때
 프로필을 다시 쓸 필요가 없다. MIT 라이선스.
 
+## 빠른 시작
+
+```bash
+git clone https://github.com/by-su/jigkit
+cd jigkit
+./bootstrap.sh --path     # 의존성·스킬 캐시·검증·PATH
+jig list                  # 프로필 다섯 개 — `jig developer` 로 연다
+```
+
+설치부터 첫 세션·스킬 소스·스택·단계 전환까지는
+[`docs/ko/QUICK_START.md`](QUICK_START.md)
+(English: [`docs/QUICK_START.md`](../QUICK_START.md)).
+이 파일의 나머지는 *왜 그런가* 를 다룬다.
+
 ## 라이브러리가 커지기 전에 나누는 이유
 
 스킬의 **설명**은 쓰든 안 쓰든 매 세션 시작에 로드된다. 본문만 미뤄진다.
-Claude Code 2.1.228 에서 실측했다 ([`probe/results/growth.md`](probe/results/growth.md)):
+Claude Code 2.1.228 에서 실측했다 ([`probe/results/growth.md`](../../probe/results/growth.md)):
 
 | 로드된 스킬 | 기동 토큰 | 스킬당 |
 |---:|---:|---:|
@@ -125,7 +139,7 @@ profiles/developer/
 프롬프트가 붙은 형태다.
 
 프로필은 페르소나가 아니라 **무엇을 읽고, 무엇을 쓰고, 무엇을 못 만지는지**로 정의된다.
-[`PRINCIPLES.md`](PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다) 를 보라 —
+[`PRINCIPLES.md`](../PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다) 를 보라 —
 이 설계에 대한 가장 강한 공개 반론을 숨기지 않고 남겨뒀다.
 
 ## 스킬 소스
@@ -159,7 +173,7 @@ skills: [anthropics/pdf, anthropics/xlsx]    # 측정한 뒤
 스킬 마흔 개의 본문을 다 읽고 무엇을 켤지 정하는 것은 현실적이지 않다. 그래서 프로필은
 전부 켠 상태로 출발하고, 하네스가 **무엇이 실제로 불리는지**를 기록한다.
 
-`anthropics/skills` 18개로 실측했다 ([`probe/results/growth.md`](probe/results/growth.md)):
+`anthropics/skills` 18개로 실측했다 ([`probe/results/growth.md`](../../probe/results/growth.md)):
 
 | `developer` | 기동 토큰 | 스킬당 |
 |---|---:|---:|
@@ -193,7 +207,7 @@ pm
 기록은 컴파일러가 각 프로필 플러그인 안에 심는 `PreToolUse` 훅이 한다. 한 줄 붙이고
 **항상 exit 0** 이라 훅이 깨져도 세션을 막지 못한다 — `exit 2` 만 차단하고, `timeout`
 으로 죽은 훅도 스킬을 통과시킨다는 것을 실측했다
-([`probe/results/skill-usage.md`](probe/results/skill-usage.md)).
+([`probe/results/skill-usage.md`](../../probe/results/skill-usage.md)).
 
 ### 업데이트
 
@@ -224,7 +238,7 @@ anthropics  7029232 -> f17010c
 존재하는지. 좋아하는 라이브러리 목록을 `CLAUDE.md` 에 적어 두면 그중 아무것도 배치되지 않는다.
 안내일 뿐이라 아무 일도 일어나지 않는다.
 
-정의는 [`library/stacks/`](library/stacks/README.md) 에 언어마다 한 파일씩, 언어 중립 도구는
+정의는 [`library/stacks/`](../../library/stacks/README.md) 에 언어마다 한 파일씩, 언어 중립 도구는
 `common.yaml` 에 있다. 그 README 의 카탈로그 표는 배치를 돌리는 것과 **같은 yaml** 에서
 생성된다 — `adapters/commands.py` 가 있는 것과 같은 이유다.
 
@@ -259,7 +273,7 @@ matcher 는 도구 이름으로 거르고 경로는 모른다. 그리고 **매�
 간에는 dedupe 되지만 **플러그인 사본은 별도로 남기** 때문이다 `[D]` — 포매터가 두 번 돈다.
 
 스택 둘을 한 프로젝트에 넣고 실측했다: `PostToolUse` 항목 1개, `.py` 편집에 파이썬 분기 1회,
-타입스크립트 분기 0회 ([`probe/results/stack-hooks.md`](probe/results/stack-hooks.md)).
+타입스크립트 분기 0회 ([`probe/results/stack-hooks.md`](../../probe/results/stack-hooks.md)).
 같은 측정이 실제 버그를 잡았다 — 두 번째 스택을 적용하면 첫 스택의 분기가 **지워졌는데**
 항목 수는 1개 그대로여서 모양만 보는 검사는 전부 초록불이었다. 지금은 id 로 병합한다.
 
@@ -358,7 +372,7 @@ jig: ✗ developer 단계 미완 (done_when 3/4 — 2026-08-13T09:00:00+00:00 �
 
 ## 격리가 뜻하는 것과 뜻하지 않는 것
 
-**뜻한다** — 실측 ([`probe/results/phase0.md`](probe/results/phase0.md)):
+**뜻한다** — 실측 ([`probe/results/phase0.md`](../../probe/results/phase0.md)):
 
 - 세션 프로세스에 `core` 와 활성 프로필만 들어간다. 다른 프로필의 스킬은 읽히지도,
   토큰화되지도, 호출되지도 않는다.
@@ -419,9 +433,9 @@ JIG_TOUCHED_BYPASS=1 git commit -m "..."
 
 **이건 문서가 맞는지 검증하지 않는다.** 코드를 바꾸고 문서를 아예 안 보는 것만 막는다 —
 무관한 `.md` 한 줄만 staged 해도 통과한다. 산문이 여전히 참인지 판단하는 것은
-자동화되지 않는다 ([`probe/results/commit-gate.md`](probe/results/commit-gate.md)).
+자동화되지 않는다 ([`probe/results/commit-gate.md`](../../probe/results/commit-gate.md)).
 
-사용자에게 보이는 변화는 [`CHANGELOG.md`](CHANGELOG.md) 의 `[Unreleased]` 에도 한 줄
+사용자에게 보이는 변화는 [`CHANGELOG.md`](../../CHANGELOG.md) 의 `[Unreleased]` 에도 한 줄
 남긴다 — 사람용 이력이고, 버전 끊기는 사람이 한다. 에이전트는 이력이 아니라 현재
 상태를 서술하는 문서를 읽으므로, 변경 이력은 primary 문서가 아니고 그것만 stage 해도
 게이트는 조용해지지 않는다 — 이력 한 줄은 "문서를 봤다" 의 증거가 아니다.
@@ -430,10 +444,10 @@ JIG_TOUCHED_BYPASS=1 git commit -m "..."
 
 "나중에 확인할 것"에도 같은 실패 모드가 있다 — 결과 문서에 묻힌 `[?]` 는 누군가
 기억해 주기를 기다린다. 그래서 미해결 질문은 등록부 한 곳,
-[`probe/PENDING.md`](probe/PENDING.md) 에 모은다 — 항목마다 **확인 방법을 반드시**
+[`probe/PENDING.md`](../../probe/PENDING.md) 에 모은다 — 항목마다 **확인 방법을 반드시**
 붙여서. 그리고 `SessionStart` 훅이 이 체크아웃 안에서 시작하는 모든 세션에 그 목록을
 주입한다. 실측: 훅의 stdout 은 `-p` 실행에서도 에이전트 컨텍스트에 들어간다
-([`probe/results/session-start.md`](probe/results/session-start.md)).
+([`probe/results/session-start.md`](../../probe/results/session-start.md)).
 
 항목을 확인하면 결과를 `probe/results/` 에 남기고 항목을 지운다. 등록부는 큐지
 기록이 아니다. `jig doctor` 가 대기 건수를 짚어 준다.
@@ -496,8 +510,10 @@ jig selftest             # 또는: python3 tests/test_gate.py
 ## 구조
 
 ```
-PRINCIPLES.md          원칙, 출처, 그리고 각각을 무엇이 강제하는가
 CHANGELOG.md           사람용 변경 이력 — 에이전트는 현재 상태 문서를 읽는다
+docs/PRINCIPLES.md     원칙, 출처, 그리고 각각을 무엇이 강제하는가
+docs/QUICK_START.md    설치부터 첫 세션까지, 그대로 복사해 실행
+docs/ko/               번역 — docs/<lang>/X.md 가 정본 X.md 를 그대로 따른다
 bootstrap.sh           첫 설치: 의존성 확인, 캐시 하이드레이션, 동작 검증
 reset-and-setup.sh     Claude Code 초기화 후 bootstrap (파일 하나로 단독 실행)
 core/                  항상 로드: PREAMBLE.md 와 /profile 스킬

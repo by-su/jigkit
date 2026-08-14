@@ -1,6 +1,6 @@
 # jigkit
 
-> 한국어: [README.ko.md](README.ko.md)
+> 한국어: [docs/ko/README.md](docs/ko/README.md)
 
 **A profile harness for AI coding agents.** It swaps the skills, MCP servers,
 tools and permissions loaded for each stage of work, so that a growing skill
@@ -13,6 +13,20 @@ agent: the rules live in permissions, not in prompts.
 
 Built for Claude Code. Profile content is tool-neutral, so adapters for other
 CLIs can be added without rewriting profiles. MIT licensed.
+
+## Quick start
+
+```bash
+git clone https://github.com/by-su/jigkit
+cd jigkit
+./bootstrap.sh --path     # dependencies, skill cache, verification, PATH
+jig list                  # five profiles — `jig developer` opens one
+```
+
+Install, first session, skill sources, stacks and stage handoff, end to end:
+[`docs/QUICK_START.md`](docs/QUICK_START.md)
+(한국어: [`docs/ko/QUICK_START.md`](docs/ko/QUICK_START.md)).
+The rest of this file is *why* it is built this way.
 
 ## Why split profiles before the library is big
 
@@ -134,7 +148,7 @@ plugin plus its settings, MCP config and system prompt.
 
 A profile is defined by **what it reads, what it writes, and what it may not
 touch** — not by a persona. See
-[`PRINCIPLES.md`](PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다), which
+[`docs/PRINCIPLES.md`](docs/PRINCIPLES.md#이-설계에-대한-반론--지우지-않고-남긴다), which
 keeps the strongest published objection to this design rather than hiding it.
 
 ## Skill sources
@@ -489,7 +503,7 @@ together — an assumption, not a measurement: both it and plugin-delivered
 ### The command list is generated, not written
 
 What a check cannot fix, deduplication can. The command tables above — in this file, in
-`README.ko.md`, and in `jig --help` — are generated from one table in
+`docs/ko/README.md`, and in `jig --help` — are generated from one table in
 `adapters/commands.py` and committed:
 
 ```bash
@@ -536,8 +550,10 @@ jig selftest             # or: python3 tests/test_gate.py
 ## Layout
 
 ```
-PRINCIPLES.md          principles, sources, and what enforces each one
 CHANGELOG.md           human-facing history — agents read the current-state docs instead
+docs/PRINCIPLES.md     principles, sources, and what enforces each one
+docs/QUICK_START.md    install to first session, copy-pasteable
+docs/ko/               translations — docs/<lang>/X.md mirrors the canonical X.md
 bootstrap.sh           first-run setup: dependencies, cache, verification
 reset-and-setup.sh     reset Claude Code to a clean state, then bootstrap (standalone)
 core/                  always loaded: PREAMBLE.md and the /profile skill

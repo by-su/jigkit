@@ -12,7 +12,9 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -388,7 +390,7 @@ text, has_primary = touched.report("00b089f~1..00b089f")
 check("놓쳤던 커밋에서 primary 히트가 난다", has_primary, True)
 usage_lines = [l for l in text.splitlines() if "jig usage" in l]
 check("jig usage 를 문서화한 줄을 짚는다", len(usage_lines) >= 2, True)
-for doc in ["README.md:", "README.ko.md:"]:
+for doc in ["README.md:", "docs/ko/README.md:"]:
     check(f"{doc} 을 짚는다", any(doc in l for l in usage_lines), True)
 check("소음 토큰이 안 섞인다",
       any(t in text for t in ("\n  print ", "\n  sorted ", "\n  jigkit ")), False)
@@ -420,9 +422,9 @@ try:
 except LookupError as e:
     _failures.append(f"생성 마커를 잃었다 — 복구 없이는 docs --update 가 못 쓴다: {e}")
 
-# ---------------------------------------------------------------- README 구조 패리티
+# ---------------------------------------------------------------- 번역 구조 패리티
 
-# 영문이 정본, 한글은 번역 — 절 구조 1:1 (CLAUDE.md 의 규칙인데 검사가 없었다).
+# 영문이 정본, 번역은 `docs/<lang>/` — 절 구조 1:1 (CLAUDE.md 의 규칙인데 검사가 없었다).
 # 헤딩 텍스트는 번역이라 비교할 수 없다 — **레벨 수열**만 본다. 코드 펜스 안의
 # `# bash 주석` 은 헤딩이 아니므로 펜스를 걷어내고 센다.
 
@@ -439,13 +441,44 @@ def _heading_levels(text: str) -> list[int]:
 check("패리티 헬퍼: 펜스 안은 세지 않고 진짜 헤딩은 센다",
       _heading_levels("# a\n```\n### 펜스 안\n```\n## b\n"), [1, 2])
 
-_en = (ROOT / "README.md").read_text(encoding="utf-8")
-_ko = (ROOT / "README.ko.md").read_text(encoding="utf-8")
-check("README 절 구조 1:1 (영문이 정본 — README.ko.md 를 맞춘다)",
-      _heading_levels(_ko), _heading_levels(_en))
-check("README 코드 펜스 수 1:1 (영문이 정본 — README.ko.md 를 맞춘다)",
-      sum(l.startswith("```") for l in _ko.splitlines()),
-      sum(l.startswith("```") for l in _en.splitlines()))
+def _canonical_of(translated: Path) -> Path:
+    """`docs/<lang>/X.md` 의 정본. README 만 루트에 살고 나머지는 `docs/X.md` 다."""
+    return ROOT / "README.md" if translated.name == "README.md" \
+        else ROOT / "docs" / translated.name
+
+
+# 번역 디렉터리를 훑는다 — 언어를 늘려도 검사를 손대지 않는다. 짝이 하나도 안 잡히면
+# 그건 통과가 아니라 검사가 죽은 것이다(번역이 옮겨졌는데 조용히 0쌍이 되는 경우).
+_pairs = sorted(p for p in (ROOT / "docs").glob("*/*.md"))
+check("번역 짝이 하나 이상 잡힌다", len(_pairs) >= 1, True)
+
+for _t in _pairs:
+    _rel = _t.relative_to(ROOT)
+    _c = _canonical_of(_t)
+    if not _c.is_file():
+        _failures.append(f"{_rel} 의 정본이 없다: {_c.relative_to(ROOT)}")
+        continue
+    _tt, _ct = _t.read_text(encoding="utf-8"), _c.read_text(encoding="utf-8")
+    check(f"{_rel} 절 구조 1:1 (영문이 정본)",
+          _heading_levels(_tt), _heading_levels(_ct))
+    check(f"{_rel} 코드 펜스 수 1:1 (영문이 정본)",
+          sum(l.startswith("```") for l in _tt.splitlines()),
+          sum(l.startswith("```") for l in _ct.splitlines()))
+
+# ---------------------------------------------------------------- 저장소 표식
+
+# 두 훅은 "cwd 의 git 루트가 jigkit 인가" 를 파일 표식으로 판별한다. 표식이 옮겨지면
+# 저장소를 못 알아보고 **조용히 통과시킨다** — 게이트가 사라졌는데 화면은 평소와 같다.
+# 실제로 PRINCIPLES.md 를 docs/ 로 옮기면서 이 검사가 없어 위험했다.
+for _mod, _label in ((gate, "jig-commit-gate"), (note, "jig-pending-note")):
+    check(f"{_label}: 이 체크아웃을 jigkit 으로 알아본다",
+          _mod.repo_root(str(ROOT)), ROOT)
+
+with tempfile.TemporaryDirectory() as _tmp:
+    subprocess.run(["git", "init", "-q", _tmp], check=True)
+    for _mod, _label in ((gate, "jig-commit-gate"), (note, "jig-pending-note")):
+        check(f"{_label}: 남의 저장소에서는 조용하다",
+              _mod.repo_root(_tmp), None)
 
 # ---------------------------------------------------------------- 기동 게이트
 

@@ -33,7 +33,7 @@ def repo_root(cwd: str) -> Path | None:
         return None
     root = Path(proc.stdout.strip())
     marks = (root / "adapters" / "touched.py", root / "bin" / "jig",
-             root / "PRINCIPLES.md")
+             root / "docs" / "PRINCIPLES.md")
     return root if all(m.exists() for m in marks) else None
 
 
