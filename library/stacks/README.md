@@ -160,6 +160,7 @@ verify: [...]                  # 조합 전체의 마지막 검사
 
 | 기능 | 도구 | 표면 | 근거 |
 |---|---|---|---|
+| runtime | `pnpm` | library | 이 스택의 create·install·verify 가 전부 pnpm 으로 적혀 있는데 정작 항목이 없어서, 카탈로그만 봐서는 무엇을 전제하는지 알 수 없었다. 에이전트 표면은 없다 — 락파일로 감지한다(package.json 만으로는 어느 매니저인지 모른다) |
 | lint | `biome` | hook | 공식 MCP 없음 — RFC #6017 과 요청 이슈 #8705 가 열린 채 머지되지 않았다 [M]. 훅이 맞다 |
 | types | `typescript` | gate | 게이트는 하나만. 프레임워크가 자체 typecheck 를 갖는 경우 그쪽으로 바꾼다 |
 | types | `zod` | library | 스키마 하나로 런타임 검증과 정적 타입. 공식 MCP 없음 — llms.txt / llms-full.txt 만 있다 [M] |
@@ -169,6 +170,7 @@ verify: [...]                  # 조합 전체의 마지막 검사
 
 | 키 | 기능 | 도구 | 표면 | 근거 |
 |---|---|---|---|---|
+| `better-auth` | auth | `better-auth` | mcp | 인증을 직접 짜면 세션·토큰 회전·소셜 프로바이더에서 조용히 틀린다. 공식 원격 MCP 가 문서·예제·세팅 지원을 준다 [D] — 설치만 하고 배선은 에이전트가 그 MCP 를 보며 한다. `init` 을 두지 않는 이유는 스캐폴드 직후에 돌릴 것이 아니라 auth 인스턴스를 정한 뒤의 일이기 때문이다 [J]. CLI 는 `npx auth@latest` (npm 의 auth 패키지가 better-auth 와 같은 버전으로 나간다 [M]) |
 | `expo` | mobile | `expo` | mcp | Expo 공식 원격 MCP — 문서·EAS 빌드·워크플로·TestFlight 크래시. Free 플랜 포함 [D] |
 | `expo` | mobile | `mobile-mcp` | mcp | 시뮬레이터·실기기 화면을 읽고 탭·입력한다 — 웹의 playwright-mcp 에 대응하는 모바일판 [D]. @mobilenext/mobile-mcp 는 npm 에 있다 [M] |
 | `maestro` | e2e | `maestro` | mcp | 공식 MCP 가 Maestro CLI 에 포함돼 있다 [D]. 하위 명령 이름 미확인 [?] |

@@ -24,8 +24,8 @@ MCP_DIR = HARNESS / "library" / "mcp"
 # 카탈로그 표의 "기능별" 축. 여기 없는 role 은 로드가 거부한다 — 자유 문자열이면
 # `lint`/`linting`/`format` 이 섞여 표가 조용히 갈라진다.
 ROLES = [
-    "runtime", "lint", "types", "test", "framework", "backend", "db", "ui",
-    "e2e", "mobile", "observability", "security", "analytics", "design",
+    "runtime", "lint", "types", "test", "framework", "backend", "db", "auth",
+    "ui", "e2e", "mobile", "observability", "security", "analytics", "design",
     "container", "perf",
 ]
 SURFACES = ["mcp", "agents", "hook", "gate", "library"]

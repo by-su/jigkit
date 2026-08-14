@@ -33,6 +33,11 @@
   `semgrep`(커밋 게이트) 은 그대로 기본값이고, MCP 판은 골라 켜는 쪽이다
   (`library/stacks/common.yaml`)
 
+- **`pnpm` 과 `better-auth` 를 카탈로그에**: TypeScript 스택의 create·install·verify 가
+  전부 pnpm 인데 정작 항목이 없어서, 카탈로그만 봐서는 무엇을 전제하는지 알 수 없었다.
+  `better-auth` 는 `--with better-auth` 로 고른다 — 공식 원격 MCP(문서·예제·세팅 지원)가
+  함께 붙어 프로필에서 켤 수 있다 (`library/stacks/typescript.yaml`)
+
 - **shadcn 에이전트 스킬**: `shadcn-ui/ui` 를 스킬 소스로 등록했다 —
   `shadcn-ui/shadcn`(레지스트리 검색·설치)과 `shadcn-ui/migrate-radix-to-base` 를
   프로필의 `skills:` 에서 고른다 (`library/sources.yaml`)

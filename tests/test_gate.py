@@ -704,6 +704,9 @@ with tempfile.TemporaryDirectory() as _tmp:
     (_proj / "package.json").write_text(
         '{"name":"t","devDependencies":{"@biomejs/biome":"2","vitest":"3","typescript":"5"},'
         '"dependencies":{"zod":"4"}}\n', encoding="utf-8")
+    # 의존성이 이미 선언돼 있다 = 설치가 끝난 프로젝트다. 락파일은 그 상태의 일부이고,
+    # `pnpm` 항목이 어느 패키지 매니저인지 감지하는 근거다 (package.json 만으로는 모른다).
+    (_proj / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
 
     check("의존성 파싱: 선언 섹션만 본다 (name 은 의존성이 아니다)",
           "t" in stacks._deps(_proj), False)
