@@ -47,14 +47,6 @@
 - 확인: `probe/session-start/run.sh` 의 settings 에서 matcher 만 바꿔 재실행.
 - 등록: 2026-08-13
 
-## MCP 서버 1개의 세션 시작 비용
-
-- 왜: 프로필이 MCP 를 선언하기 시작하면 budget 상한에 넣어야 하는데 계수가 없다.
-- 확인: 로컬 stdio 에코 서버를 `library/mcp/` 에 선언한 프로필로 `jig budget` 전후
-  대조. `-p` 경로에 앱 커넥터가 안 붙는 문제는 stdio 서버로 우회된다.
-  (growth.md 의 `[?]` 에서 이관)
-- 등록: 2026-08-13
-
 ## --agent <name> 이 --plugin-dir 로 들어온 에이전트를 이름으로 잡는가
 
 - 왜: 프로필 기동 시 서브에이전트를 지정 기동할 수 있으면 agents 항목의 쓸모가 커진다.
