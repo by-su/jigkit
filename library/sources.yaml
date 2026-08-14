@@ -17,3 +17,6 @@ sources:
   obra:
     ref: 44c9b2d6e889982ac18c27d05a19fefe335194e1
     repo: https://github.com/obra/superpowers
+  shadcn-ui:
+    ref: d4fc45b1fbabfccb7a6a4333d8004cf19481caa9
+    repo: https://github.com/shadcn-ui/ui

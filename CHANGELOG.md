@@ -33,6 +33,10 @@
   `semgrep`(커밋 게이트) 은 그대로 기본값이고, MCP 판은 골라 켜는 쪽이다
   (`library/stacks/common.yaml`)
 
+- **shadcn 에이전트 스킬**: `shadcn-ui/ui` 를 스킬 소스로 등록했다 —
+  `shadcn-ui/shadcn`(레지스트리 검색·설치)과 `shadcn-ui/migrate-radix-to-base` 를
+  프로필의 `skills:` 에서 고른다 (`library/sources.yaml`)
+
 - **전역 기본 지침**: `bootstrap.sh` 가 `core/GLOBAL_CLAUDE.md` (Karpathy 행동 지침 +
   응답 언어)를 `~/.claude/CLAUDE.md` 로 깐다. 모든 세션이 싣는 자리라 새 머신이 빈손으로
   시작하지 않는다. **병합이 아니라 덮어쓴다** (`bootstrap.sh`, `core/GLOBAL_CLAUDE.md`)
