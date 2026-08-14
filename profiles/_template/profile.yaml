@@ -22,6 +22,10 @@ permissions:
 skills: []
 agents: []
 
+# 카탈로그(library/stacks/)의 id 를 그대로 적는다 — `jig stack list` 로 고를 수 있는 것을 본다.
+# 기본은 없음: 켜면 도구 정의가 매 세션 컨텍스트에 올라간다.
+mcp: []
+
 bundled_skills: false
 
 done_when:

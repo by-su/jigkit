@@ -398,13 +398,31 @@ def _deps(project: Path) -> set[str]:
     return names
 
 
+def mcp_override_differs(iid: str, definition: dict) -> bool:
+    """`library/mcp/<id>.json` 이 카탈로그 정의와 다른가.
+
+    빌드는 이 파일을 카탈로그보다 우선한다. 그래서 **다른 내용의 사본이 남아 있으면
+    카탈로그를 고쳐도 세션에는 옛 정의가 실린다.** 조용하면 아무 일도 없어 보이므로
+    apply·check 양쪽에서 같은 판정을 쓴다.
+    """
+    f = MCP_DIR / f"{iid}.json"
+    if not f.is_file():
+        return False
+    try:
+        return json.loads(f.read_text(encoding="utf-8")) != definition
+    except (OSError, json.JSONDecodeError):
+        return True
+
+
 def _detected(spec: dict, project: Path, deps: set[str]) -> bool:
     if "dep" in spec:
         return str(spec["dep"]).lower() in deps
     if "file" in spec:
         return (project / spec["file"]).exists()
     if "mcp" in spec:
-        return (MCP_DIR / f"{spec['mcp']}.json").is_file()
+        # 예전에는 `library/mcp/<id>.json` 이 있어야 "배치됐다" 였다. 이제 정의는
+        # 카탈로그에 살고 그 파일은 override 라, 파일 없음은 결함이 아니다.
+        return spec["mcp"] in catalog_items() or (MCP_DIR / f"{spec['mcp']}.json").is_file()
     return False
 
 
@@ -463,8 +481,12 @@ def check(combo: dict, project: Path) -> list[tuple[str, str]]:
         elif surface == "gate" and iid not in gate_ids:
             missing.append((iid, "게이트 디스패처에 살아 있는 분기가 없다 — jig stack apply"))
             flagged = True
-        elif surface == "mcp" and not (MCP_DIR / f"{iid}.json").is_file():
-            missing.append((iid, f"library/mcp/{iid}.json 이 없다 — jig stack apply"))
+        # mcp 는 대상 프로젝트에 배치되는 것이 없다 — 정의가 카탈로그에 살고 프로필이
+        # id 로 켠다. 그래서 "없다" 가 아니라 **"카탈로그와 다른 사본이 가리고 있다"**
+        # 를 본다. 파일이 이기므로 이쪽이 조용한 고장이다.
+        elif surface == "mcp" and mcp_override_differs(iid, item["mcp"]):
+            missing.append((iid, f"library/mcp/{iid}.json 이 카탈로그와 다르다 — "
+                                 f"이 파일이 이긴다. override 가 아니면 지운다"))
             flagged = True
 
         # 표면 검사를 통과했어도 **도구가 깔렸는지는 따로 본다.** 예전에는 hook·gate·mcp 가
@@ -572,7 +594,7 @@ def show_lines(combo: dict) -> list[str]:
         note = {
             "hook": "  → 항목 하나(.claude/hooks/jig-format)의 분기로 들어간다",
             "gate": "  → 항목 하나(.claude/hooks/jig-gate)의 분기로 들어간다",
-            "mcp": "  → library/mcp/<id>.json 만 만든다. 프로필에 켜는 것은 사람이 한다",
+            "mcp": "  → 프로필에 켜는 것은 사람이 한다. id 만 적으면 된다",
             "agents": "  → init 이 대상 프로젝트에 에이전트 정의를 만든다",
             "library": "  → 설치만. 에이전트 표면이 없다",
         }[surface]

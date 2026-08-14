@@ -18,7 +18,7 @@ templates/<id>/   apply 가 복사하는 설정 파일. 이미 있으면 덮지 
 
 | surface | 뜻 | 어디로 가는가 |
 |---|---|---|
-| `mcp` | 업스트림이 MCP 서버를 출하한다 | `library/mcp/<id>.json` 스캐폴드. **프로필에 자동으로 켜지 않는다** |
+| `mcp` | 업스트림이 MCP 서버를 출하한다 | 여기 있는 정의를 프로필이 id 로 바로 켠다. **자동으로 켜지지는 않는다** |
 | `agents` | 업스트림이 서브에이전트 정의를 출하한다 | `init` 명령이 대상 프로젝트에 생성 (예: Playwright) |
 | `hook` | 파일을 고친 직후 결정론적으로 돌아야 한다 | `.claude/hooks/jig-format` 의 분기 하나 |
 | `gate` | 커밋 전에 막아야 한다 | `.claude/hooks/jig-gate` 의 분기 하나 |
@@ -26,6 +26,9 @@ templates/<id>/   apply 가 복사하는 설정 파일. 이미 있으면 덮지 
 
 `library` 를 "빠진 것"으로 읽지 않는다. Biome·Ruff 에 공식 MCP 가 없는 것은 방치가 아니라
 CLI 가 이미 결정론적이라는 신호이고, 그래서 훅으로 간다.
+
+`surface: mcp` 항목은 프로필의 `mcp:` 에 id 만 적으면 켜진다 — `library/mcp/` 에 파일이
+없어도 된다. 그 디렉터리는 override 다(`library/mcp/README.md`).
 
 ## 항목 형식
 

@@ -296,7 +296,7 @@ anthropics  7029232 -> f17010c
 
 | `surface` | 업스트림이 출하하는 것 | 어디로 가는가 |
 |---|---|---|
-| `mcp` | MCP 서버 | `library/mcp/<id>.json`. **어느 프로필에도 켜지 않는다** |
+| `mcp` | MCP 서버 | 프로필이 id 로 켠다. **다만 자동으로 켜지지는 않는다** |
 | `agents` | 서브에이전트 정의 | `init` 이 프로젝트에 만든다 (Playwright) |
 | `hook` | 없음 — CLI | `.claude/hooks/jig-format` 의 분기 하나 |
 | `gate` | 없음 — CLI | `.claude/hooks/jig-gate` 의 분기 하나 |
@@ -305,6 +305,10 @@ anthropics  7029232 -> f17010c
 `library` 는 빠진 것이 아니다. Biome 과 Ruff 에는 공식 MCP 서버가 없고 양쪽 요청이 아직
 업스트림에 열려 있다 `[M]`. 그것은 방치가 아니라 신호다 — CLI 가 이미 결정론적이라, 모델이
 부를지 판단해야 하는 도구보다 훅이 낫다.
+
+`surface: mcp` 항목은 전부 프로필에서 id 만으로 켤 수 있다 — 카탈로그가 곧 정의다.
+`library/mcp/<id>.json` 이 그것을 덮으며, 비밀은 그쪽으로 간다. 카탈로그는 커밋되므로
+`${VAR}` 참조만 싣는다.
 
 ### 이벤트당 훅 항목은 하나
 

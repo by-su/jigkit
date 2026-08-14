@@ -901,7 +901,10 @@ def main() -> None:
             if rest and Path(rest[0]).is_dir():
                 project, rest = Path(rest[0]).resolve(), rest[1:]
             cmd_run(cmd, project, rest)
-    except (BuildError, SourceError) as e:
+    # StackError 도 여기 온다 — 프로필이 카탈로그 id 로 MCP 를 켜면서 컴파일 경로가
+    # 카탈로그를 읽게 됐다. 어긋난 카탈로그 정의가 `jig golden` 을 raw traceback 으로
+    # 죽이면 _validate_item 이 메시지를 잘 쓴 뜻이 사라진다.
+    except (BuildError, SourceError, stacks.StackError) as e:
         die(str(e))
 
 

@@ -321,7 +321,7 @@ What matters about a tool is **how an agent gets hold of it**:
 
 | `surface` | Upstream ships | Where it goes |
 |---|---|---|
-| `mcp` | an MCP server | `library/mcp/<id>.json`, **not enabled in any profile** |
+| `mcp` | an MCP server | a profile enables it by id, **but never automatically** |
 | `agents` | subagent definitions | `init` writes them into the project (Playwright) |
 | `hook` | nothing — a CLI | one branch of `.claude/hooks/jig-format` |
 | `gate` | nothing — a CLI | one branch of `.claude/hooks/jig-gate` |
@@ -330,6 +330,10 @@ What matters about a tool is **how an agent gets hold of it**:
 `library` is not a gap. Biome and Ruff have no official MCP server — both requests are
 still open upstream `[M]` — and that is a signal, not neglect: their CLI is already
 deterministic, so a hook beats a tool the model has to decide to call.
+
+Every `surface: mcp` entry is enableable from a profile by id alone — the catalogue is
+the definition. `library/mcp/<id>.json` overrides it, which is where a secret goes,
+since the catalogue is committed and only carries `${VAR}` references.
 
 ### One hook entry per event
 

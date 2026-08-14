@@ -16,9 +16,10 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-# sources 는 도구 중립이라 adapters/ 바로 아래 산다. 어떻게 실행되든 잡히게 한다.
+# sources·stacks 는 도구 중립이라 adapters/ 바로 아래 산다. 어떻게 실행되든 잡히게 한다.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import sources  # noqa: E402
+import stacks  # noqa: E402
 
 HARNESS = Path(__file__).resolve().parents[2]
 LIBRARY = HARNESS / "library"
@@ -157,17 +158,46 @@ def build_settings(profile: dict, project: Path) -> dict:
     return settings
 
 
+def catalog_mcp() -> dict[str, dict]:
+    """카탈로그에서 `surface: mcp` 인 항목의 `id -> 서버 정의`.
+
+    id 가 전역 유일함은 `stacks.load()` 가 보장한다.
+    """
+    return {
+        iid: item["mcp"]
+        for iid, item in stacks.catalog_items().items()
+        if item.get("surface") == "mcp"
+    }
+
+
 def build_mcp(profile: dict) -> dict:
     """선언한 서버만 싣는다. 기본은 빈 집합.
 
+    id 는 **카탈로그(`library/stacks/`)에서 바로 켠다** — 정의가 두 곳에 살면
+    한쪽만 고치는 사고가 난다. `library/mcp/<id>.json` 은 그 위의 override 다:
+    토큰처럼 커밋할 수 없는 것을 넣거나 카탈로그와 다르게 띄우고 싶을 때 쓴다.
+
     launch 는 이 파일을 --mcp-config 로 넘기고 --strict-mcp-config 를 붙인다
     → 다른 모든 MCP 설정이 무시된다 [D]."""
-    servers = {}
+    servers: dict[str, dict] = {}
+    cat: dict[str, dict] | None = None
     for sid in profile.get("mcp") or []:
         f = LIBRARY / "mcp" / f"{sid}.json"
-        if not f.is_file():
-            raise BuildError(f"MCP 서버 '{sid}' 정의가 없다: {f}")
-        servers[sid] = json.loads(f.read_text(encoding="utf-8"))
+        if f.is_file():
+            servers[sid] = json.loads(f.read_text(encoding="utf-8"))
+            continue
+        if cat is None:
+            cat = catalog_mcp()
+        if sid not in cat:
+            # 켤 수 있는 것은 카탈로그 **와** library/mcp/ 의 합집합이다. 카탈로그만
+            # 세면 `example` 처럼 파일로만 있는 id 가 목록에서 빠져, 오타를 고치려는
+            # 사람에게 "그건 없다" 고 거짓말한다.
+            known = sorted(cat | {p.stem for p in (LIBRARY / "mcp").glob("*.json")})
+            raise BuildError(
+                f"MCP 서버 '{sid}' 를 모른다. {f} 도 없고 카탈로그에도 없다. "
+                f"켤 수 있는 것: {', '.join(known) or '(없음)'}"
+            )
+        servers[sid] = cat[sid]
     return {"mcpServers": servers}
 
 

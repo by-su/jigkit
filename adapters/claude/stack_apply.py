@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """스택 배치 — Claude Code 문법을 아는 쪽. **파일을 쓰는 유일한 스택 경로다.**
 
-여기 있는 것은 흔들리면 안 되는 것들이다: 훅 JSON · 디스패처 스크립트 · 설정 파일 ·
-MCP 정의. 프로젝트 생성과 의존성 설치는 스킬이 셸에서 한다 — 대화형 프롬프트와 버전마다
+여기 있는 것은 흔들리면 안 되는 것들이다: 훅 JSON · 디스패처 스크립트 · 설정 파일.
+MCP 정의는 **여기서 쓰지 않는다** — 카탈로그에 한 벌만 살고 프로필이 id 로 켠다.
+프로젝트 생성과 의존성 설치는 스킬이 셸에서 한다 — 대화형 프롬프트와 버전마다
 바뀌는 인자를 파이썬으로 감싸면 실패 처리를 전부 다시 써야 하고, 그때부터 에이전트가
 실행기를 우회한다.
 
@@ -285,19 +286,23 @@ def apply(combo: dict, project: Path, write: bool) -> list[str]:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(f, dst)
 
-    # 4) MCP 정의 — jigkit 안에 만들고, 프로필에 켜는 것은 사람이 한다.
-    #    프로필은 --strict-mcp-config 라 대상 프로젝트의 .mcp.json 을 무시하고,
-    #    MCP 1개의 기동 비용이 아직 미실측이다 (probe/PENDING.md).
-    pending_mcp = []
+    # 4) MCP — **여기서 파일을 만들지 않는다.**
+    #
+    #    예전에는 조합의 mcp 항목마다 `library/mcp/<id>.json` 을 미리 깔았다. 지금은
+    #    프로필이 카탈로그 id 를 바로 켜므로 그 파일이 필요 없고, 만들면 해롭다:
+    #    빌드는 파일을 카탈로그보다 우선하므로 **한 번 깔린 사본이 이후의 카탈로그
+    #    수정을 영구히 가린다.** 옛 정의(`@posthog/mcp-server`)가 깔린 기계에서는
+    #    카탈로그를 고쳐도 세션에 옛 정의가 실리고, apply 는 "이미 있음" 이라고만 한다.
+    #    정의는 카탈로그 한 곳에만 산다 — 파일은 사람이 override 하려 할 때만 만든다.
+    #
+    #    켜는 것은 사람이 한다: 프로필은 --strict-mcp-config 라 대상 프로젝트의
+    #    .mcp.json 을 무시하고, 도구 하나당 ~15토큰이 붙는다 [M]
+    #    (probe/results/mcp-env.md).
+    pending_mcp = [i["id"] for i in combo["items"] if i["surface"] == "mcp"]
     for item in (i for i in combo["items"] if i["surface"] == "mcp"):
-        dst = stacks.MCP_DIR / f"{item['id']}.json"
-        pending_mcp.append(item["id"])
-        if dst.is_file():
-            out.append(f"이미 있음  library/mcp/{item['id']}.json")
-            continue
-        out.append(f"쓴다  library/mcp/{item['id']}.json")
-        if write:
-            write_readback(dst, json.dumps(item["mcp"], indent=2, ensure_ascii=False) + "\n")
+        if stacks.mcp_override_differs(item["id"], item["mcp"]):
+            out.append(f"주의  library/mcp/{item['id']}.json 이 카탈로그와 다르다 "
+                       f"— 이 파일이 이깁니다. 의도한 override 가 아니면 지운다")
     if pending_mcp:
         out += ["", "MCP 는 자동으로 켜지 않는다. 쓰려면 프로필에 직접 적는다:",
                 f"    mcp: [{', '.join(pending_mcp)}]",

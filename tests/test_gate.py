@@ -738,6 +738,34 @@ with tempfile.TemporaryDirectory() as _tmp:
     check("check: 배치 후에는 빈 목록",
           [i for i, _ in stacks.check(stacks.resolve("typescript"), _proj)], [])
 
+    # MCP 정의는 카탈로그 한 곳에만 산다. apply 가 사본을 깔면 그 사본이 빌드에서
+    # 카탈로그를 **이기므로**, 이후의 카탈로그 수정이 조용히 무시된다.
+    check("MCP: apply 는 library/mcp/ 에 사본을 만들지 않는다",
+          sorted(p.name for p in stacks.MCP_DIR.glob("*.json")), [])
+
+    # 사람이 override 를 두는 것은 정상이다. 다만 **카탈로그와 다른 사본이 이기고 있다**는
+    # 사실은 보여야 한다 — 안 보이면 카탈로그를 고쳐도 세션이 안 바뀌는데 아무 신호가 없다.
+    # mcp 항목이 있는 조합을 쓴다. 언어 base 만으로는 mcp 표면이 없을 수 있고,
+    # 그때 next() 가 StopIteration 으로 터지면 검사가 아니라 사고다.
+    _ts = stacks.resolve("web-app")
+    _mcp_ids = [i["id"] for i in _ts["items"] if i["surface"] == "mcp"]
+    check("MCP: 검사용 조합에 mcp 항목이 있다", bool(_mcp_ids), True)
+    _mcp_id = _mcp_ids[0]
+    (stacks.MCP_DIR / f"{_mcp_id}.json").write_text(
+        '{"command": "echo", "args": ["override"]}\n', encoding="utf-8")
+    check("MCP: 카탈로그와 다른 override 를 check 가 짚는다",
+          [i for i, _ in stacks.check(_ts, _proj) if i == _mcp_id], [_mcp_id])
+    check("MCP: apply 도 같은 것을 짚는다",
+          any("카탈로그와 다르다" in l for l in stack_apply.apply(_ts, _proj, write=False)), True)
+
+    # 같은 내용이면 override 가 아니다 — 조용해야 한다. 여기가 시끄러우면 사람이 무시한다.
+    (stacks.MCP_DIR / f"{_mcp_id}.json").write_text(
+        json.dumps(next(i for i in _ts["items"] if i["id"] == _mcp_id)["mcp"]) + "\n",
+        encoding="utf-8")
+    check("MCP: 내용이 같은 사본은 짚지 않는다",
+          [i for i, _ in stacks.check(_ts, _proj) if i == _mcp_id], [])
+    (stacks.MCP_DIR / f"{_mcp_id}.json").unlink()
+
     # 훅·게이트는 걸렸는데 도구가 안 깔린 상태를 "ok" 라고 하면 안 된다 — 표면 검사와
     # detect 를 **둘 다** 본다. 매 편집마다 stderr 만 나오는 형태가 여기서 새어 나갔다.
     with tempfile.TemporaryDirectory() as _bare:

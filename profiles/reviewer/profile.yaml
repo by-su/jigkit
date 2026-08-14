@@ -25,6 +25,8 @@ permissions:
 # 불리는지 재고 나서 개별 id 로 좁힌다. 좁히는 것은 이 줄 한 줄을 고치는 일이다.
 skills: ["anthropics/*", "obra/*"]
 agents: []
+# 이 단계가 실제로 쓰는 MCP 서버만. 카탈로그(library/stacks/)의 id 를 그대로 적는다 —
+# `jig stack list` 로 고를 수 있는 것을 본다. 기본은 없음: 켜면 도구 정의가 매 세션 올라간다.
 mcp: []
 
 # 기동 토큰 상한. jig budget 이 실측해 대조한다.

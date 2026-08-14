@@ -20,16 +20,10 @@ cd "$SANDBOX"
 printf '[project]\nname = "probe"\ndependencies = []\n\n[dependency-groups]\ndev = []\n' > pyproject.toml
 printf '{"name":"probe","devDependencies":{}}\n' > package.json
 
-# apply 는 MCP 정의를 jigkit 안(library/mcp/)에 만든다 — 그게 정상 동작이다.
-# 프로브가 저장소를 더럽히면 안 되므로 새로 생긴 것만 되돌린다.
-before="$(ls "$ROOT/library/mcp" 2>/dev/null)"
-
+# apply 는 저장소 안에 아무것도 만들지 않는다 — MCP 정의는 카탈로그에 한 벌만 산다.
+# 예전에는 library/mcp/ 에 사본을 깔아서 프로브가 그것을 되돌려야 했다.
 "$ROOT/bin/jig" stack apply python "$SANDBOX" --apply > /dev/null
 "$ROOT/bin/jig" stack apply typescript "$SANDBOX" --apply > /dev/null
-
-for f in $(comm -13 <(echo "$before") <(ls "$ROOT/library/mcp")); do
-  rm -f "$ROOT/library/mcp/$f"
-done
 
 echo "=== 배치 결과: 이벤트당 훅 항목 수 ==="
 python3 - <<'PY'

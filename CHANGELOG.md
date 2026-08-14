@@ -19,6 +19,15 @@
 
 ### Added
 
+- **MCP 를 프로필에서 골라 켠다**: 카탈로그(`library/stacks/`)의 `surface: mcp` 항목은
+  이제 프로필의 `mcp:` 에 id 만 적으면 켜진다 — `library/mcp/<id>.json` 파일이 없어도
+  된다. 그 디렉터리는 override 로 남는다(토큰처럼 커밋할 수 없는 것을 넣는 자리).
+  고를 수 있는 것은 `jig stack list` 로 본다. **`jig stack apply` 는 이제 거기에 사본을
+  만들지 않는다** — 사본이 카탈로그를 이기므로, 한 번 깔리면 이후의 카탈로그 수정이
+  조용히 무시됐다. 대신 카탈로그와 다른 사본이 있으면 `apply` 와 `jig stack check` 가
+  짚는다 (`adapters/claude/build.py`, `adapters/claude/stack_apply.py`,
+  `library/mcp/README.md`)
+
 - **전역 기본 지침**: `bootstrap.sh` 가 `core/GLOBAL_CLAUDE.md` (Karpathy 행동 지침 +
   응답 언어)를 `~/.claude/CLAUDE.md` 로 깐다. 모든 세션이 싣는 자리라 새 머신이 빈손으로
   시작하지 않는다. **병합이 아니라 덮어쓴다** (`bootstrap.sh`, `core/GLOBAL_CLAUDE.md`)
